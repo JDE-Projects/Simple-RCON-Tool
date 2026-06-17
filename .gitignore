@@ -1,0 +1,22 @@
+# --- Simple RCON Tool .gitignore ---
+
+# Runtime data: holds your real hosts and ports. Never commit.
+servers.json
+
+# Exported console logs written next to the app
+*_Console_*.txt
+
+# Optional debug logs (written next to the exe when the toggle is on)
+Debug_Log_*.txt
+
+# PyInstaller build output
+build/
+dist/
+*.spec
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Local-only test launcher (kept out of the repo on purpose)
+Launch_*.bat

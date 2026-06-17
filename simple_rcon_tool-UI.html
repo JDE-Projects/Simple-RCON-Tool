@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Simple RCON Tool</title>
+<style>
+  /* Fonts are bundled locally (fonts/ next to this file, --add-data "fonts;fonts").
+     No web-font CDN: it fails offline and the theme would fall back to system fonts. */
+  @font-face { font-family:'Sora'; font-weight:300; font-style:normal; font-display:swap; src:url('fonts/sora-300.woff2') format('woff2'); }
+  @font-face { font-family:'Sora'; font-weight:400; font-style:normal; font-display:swap; src:url('fonts/sora-400.woff2') format('woff2'); }
+  @font-face { font-family:'Sora'; font-weight:500; font-style:normal; font-display:swap; src:url('fonts/sora-500.woff2') format('woff2'); }
+  @font-face { font-family:'Sora'; font-weight:600; font-style:normal; font-display:swap; src:url('fonts/sora-600.woff2') format('woff2'); }
+  @font-face { font-family:'Sora'; font-weight:700; font-style:normal; font-display:swap; src:url('fonts/sora-700.woff2') format('woff2'); }
+  @font-face { font-family:'JetBrains Mono'; font-weight:400; font-style:normal; font-display:swap; src:url('fonts/jetbrains-mono-400.woff2') format('woff2'); }
+  @font-face { font-family:'JetBrains Mono'; font-weight:500; font-style:normal; font-display:swap; src:url('fonts/jetbrains-mono-500.woff2') format('woff2'); }
+  @font-face { font-family:'JetBrains Mono'; font-weight:600; font-style:normal; font-display:swap; src:url('fonts/jetbrains-mono-600.woff2') format('woff2'); }
+
+  :root {
+    --bg:        #0a0e14;
+    --bg-2:      #0e131c;
+    --panel:     #121823;
+    --panel-2:   #161d2a;
+    --border:    #20293a;
+    --border-2:  #2b3650;
+    --text:      #dfe7f2;
+    --text-dim:  #8a98b0;
+    --text-faint:#5a6678;
+    --accent:    #4dd6c1;
+    --accent-2:  #2bb6a3;
+    --glow:      rgba(77, 214, 193, 0.35);
+    --amber:     #f0b860;
+    --red:       #ff6b7a;
+    --green:     #5ce39b;
+    --blue:      #6db3ff;
+    --purple:    #b48cff;
+    --radius:    14px;
+    --radius-sm: 9px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Sora', system-ui, sans-serif;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    background:
+      radial-gradient(900px 500px at 12% -10%, rgba(77,214,193,0.10), transparent 60%),
+      radial-gradient(800px 500px at 100% 0%, rgba(109,179,255,0.07), transparent 55%),
+      var(--bg);
+  }
+
+  /* ---- layout ---- */
+  .app {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      "top  top"
+      "left right";
+    height: 100vh;
+    gap: 16px;
+    padding: 18px;
+  }
+
+  /* ---- top bar ---- */
+  .topbar {
+    grid-area: top;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand .mark {
+    width: 40px; height: 40px; border-radius: 11px;
+    background: linear-gradient(145deg, var(--accent), var(--accent-2));
+    display: grid; place-items: center;
+    box-shadow: 0 0 24px var(--glow), inset 0 1px 0 rgba(255,255,255,0.25);
+  }
+  .brand .mark svg { width: 22px; height: 22px; }
+  .brand h1 { font-size: 18px; font-weight: 600; letter-spacing: 0.2px; }
+  .brand .sub {
+    font-size: 11.5px; color: var(--text-faint);
+    letter-spacing: 1.5px; text-transform: uppercase; margin-top: 1px;
+  }
+  .top-actions { display: flex; gap: 10px; }
+
+  /* ---- buttons ---- */
+  .btn {
+    font-family: inherit; font-size: 13px; font-weight: 500;
+    color: var(--text); cursor: pointer;
+    background: var(--panel-2);
+    border: 1px solid var(--border-2);
+    border-radius: var(--radius-sm);
+    padding: 9px 14px;
+    display: inline-flex; align-items: center; gap: 8px;
+    transition: all 0.16s ease;
+    white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--accent); color: #fff; transform: translateY(-1px); }
+  .btn:active { transform: translateY(0); }
+  .btn svg { width: 15px; height: 15px; }
+  .btn.primary {
+    background: linear-gradient(145deg, var(--accent), var(--accent-2));
+    color: #042b27; border: none; font-weight: 600;
+    box-shadow: 0 4px 18px var(--glow);
+  }
+  .btn.primary:hover { filter: brightness(1.08); color: #042b27; }
+  .btn.ghost { background: transparent; }
+  .btn.danger:hover { border-color: var(--red); color: var(--red); }
+  .btn.tiny { padding: 6px 10px; font-size: 12px; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  /* quick-command buttons sit in a wrapping grid */
+  .quick-btn { background: var(--panel); }
+  .quick-btn.confirm-btn:hover { border-color: var(--amber); color: var(--amber); }
+  .quick-btn.custom-btn { border-style: dashed; }
+
+  /* ---- left column: servers ---- */
+  .servers {
+    grid-area: left;
+    background: linear-gradient(180deg, var(--panel), var(--bg-2));
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .col-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 18px 12px;
+  }
+  .col-head h2 {
+    font-size: 12px; letter-spacing: 1.6px; text-transform: uppercase;
+    color: var(--text-dim); font-weight: 600;
+  }
+  .server-list {
+    flex: 1;
+    overflow-y: auto; padding: 4px 14px 14px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .col-foot {
+    padding: 10px 18px; border-top: 1px solid var(--border);
+    font-size: 11px; color: var(--text-faint);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .col-foot a { color: var(--text-dim); text-decoration: none; font-family: 'JetBrains Mono', monospace; }
+  .col-foot a:hover { color: var(--accent); }
+
+  .card {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 15px 16px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    position: relative; overflow: hidden;
+  }
+  .card.connected {
+    border-color: var(--accent-2);
+    box-shadow: 0 0 0 1px rgba(77,214,193,0.15), 0 8px 30px rgba(0,0,0,0.3);
+  }
+  .card::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+    background: var(--border-2); transition: background 0.2s;
+  }
+  .card.connected::before { background: linear-gradient(var(--accent), var(--accent-2)); }
+  .card.staged::before { background: var(--amber); }
+
+  .card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .card-name { font-size: 15.5px; font-weight: 600; display: flex; align-items: center; gap: 9px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-faint); flex: none; }
+  .card.connected .dot {
+    background: var(--green);
+    box-shadow: 0 0 0 3px rgba(92,227,155,0.18); animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.55;} }
+  .card-meta { font-size: 12px; color: var(--text-faint); margin-top: 3px; font-family: 'JetBrains Mono', monospace; }
+
+  .badge {
+    font-size: 10px; font-family: 'JetBrains Mono', monospace;
+    padding: 2px 8px; border-radius: 999px;
+    border: 1px solid var(--border-2); color: var(--text-dim);
+    letter-spacing: 0.4px; white-space: nowrap;
+  }
+  .badge.soon { color: var(--amber); border-color: rgba(240,184,96,0.4); }
+
+  .card-icons { display: flex; gap: 4px; }
+  .icon-btn {
+    background: none; border: none; color: var(--text-faint); cursor: pointer;
+    padding: 4px; border-radius: 6px; display: grid; place-items: center;
+    transition: all 0.15s;
+  }
+  .icon-btn:hover { color: var(--text); background: var(--border); }
+  .icon-btn svg { width: 15px; height: 15px; }
+
+  .pw-row { display: none; margin-top: 13px; gap: 8px; }
+  .card:not(.connected) .pw-row { display: flex; }
+  .pw-row input {
+    flex: 1; background: var(--bg); border: 1px solid var(--border-2);
+    border-radius: var(--radius-sm); color: var(--text);
+    padding: 9px 12px; font-family: inherit; font-size: 13px;
+  }
+  .pw-row input:focus { outline: none; border-color: var(--accent); }
+
+  .coming-soon {
+    margin-top: 13px; font-size: 12px; color: var(--amber);
+    background: rgba(240,184,96,0.07); border: 1px solid rgba(240,184,96,0.25);
+    border-radius: var(--radius-sm); padding: 9px 12px; line-height: 1.45;
+  }
+
+  .actions-wrap { display: none; margin-top: 13px; flex-direction: column; gap: 11px; }
+  .card.connected .actions-wrap { display: flex; }
+  .quick-grid { display: flex; flex-wrap: wrap; gap: 7px; }
+  .quick-empty { font-size: 12px; color: var(--text-faint); }
+
+  .custom-row { display: flex; gap: 8px; align-items: stretch; }
+  .custom-row input[type=text] {
+    flex: 1; background: var(--bg); border: 1px solid var(--border-2);
+    border-radius: var(--radius-sm); color: var(--text);
+    padding: 9px 12px; font-family: 'JetBrains Mono', monospace; font-size: 12.5px;
+  }
+  .custom-row input[type=text]:focus { outline: none; border-color: var(--accent); }
+  .card-footer { display: flex; justify-content: flex-end; }
+
+  /* ---- right column: console ---- */
+  .console-wrap {
+    grid-area: right;
+    background: linear-gradient(180deg, var(--panel), var(--bg-2));
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .console-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px; border-bottom: 1px solid var(--border);
+  }
+  .console-head .lights { display: flex; gap: 6px; margin-right: 4px; }
+  .console-head .lights i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+  .console-head .lights i:nth-child(1){ background:#ff5f57; }
+  .console-head .lights i:nth-child(2){ background:#febc2e; }
+  .console-head .lights i:nth-child(3){ background:#28c840; }
+  .console-head h2 {
+    font-size: 12px; letter-spacing: 1.6px; text-transform: uppercase;
+    color: var(--text-dim); font-weight: 600;
+  }
+  .console {
+    flex: 1; overflow-y: auto; padding: 14px 16px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12.5px; line-height: 1.65;
+  }
+  .ln { white-space: pre-wrap; word-break: break-word; display: flex; gap: 10px; }
+  .ln .tag {
+    flex: none; color: var(--text-faint); font-size: 10.5px;
+    width: 120px; text-align: right; opacity: 0.75; padding-top: 1px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .ln .msg { flex: 1; }
+  .ln.cmd .msg   { color: var(--accent); font-weight: 600; }
+  .ln.ok .msg    { color: var(--green); }
+  .ln.err .msg   { color: var(--red); }
+  .ln.warn .msg  { color: var(--amber); }
+  .ln.muted .msg { color: var(--text-faint); }
+  .ln.out .msg   { color: var(--text-dim); }
+  .console-empty {
+    color: var(--text-faint); font-size: 13px; text-align: center;
+    margin-top: 40px; font-family: 'Sora', sans-serif;
+  }
+
+  /* ---- modal ---- */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(4,7,12,0.82);
+    display: none; place-items: center; z-index: 50;
+  }
+  .overlay.show { display: grid; }
+  .modal {
+    width: 540px; max-width: 92vw; max-height: 88vh; overflow-y: auto;
+    background: var(--panel); border: 1px solid var(--border-2);
+    border-radius: var(--radius); padding: 22px;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+    animation: rise 0.18s ease;
+  }
+  @keyframes rise { from{ opacity:0; transform: translateY(12px);} to{opacity:1; transform:none;} }
+  .modal h3 { font-size: 17px; margin-bottom: 4px; }
+  .modal p.hint { font-size: 12.5px; color: var(--text-faint); margin-bottom: 18px; }
+  .field { margin-bottom: 14px; }
+  .field label {
+    display: block; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase;
+    color: var(--text-dim); margin-bottom: 6px; font-weight: 600;
+  }
+  .field input, .field select {
+    width: 100%; background: var(--bg); border: 1px solid var(--border-2);
+    border-radius: var(--radius-sm); color: var(--text);
+    padding: 10px 12px; font-family: inherit; font-size: 13.5px;
+  }
+  .field input:focus, .field select:focus { outline: none; border-color: var(--accent); }
+  .row2 { display: grid; grid-template-columns: 1fr 140px; gap: 12px; }
+  .game-note { font-size: 12px; color: var(--text-faint); margin-top: 7px; line-height: 1.45; }
+  .game-note.soon { color: var(--amber); }
+
+  /* built-in (locked) button preview */
+  .lock-label { display: flex; align-items: center; gap: 6px; }
+  .lock-label svg { width: 12px; height: 12px; }
+  .locked-preview { display: flex; flex-wrap: wrap; gap: 6px; }
+  .locked-chip {
+    font-size: 11.5px; padding: 5px 9px; border-radius: var(--radius-sm);
+    background: var(--bg); border: 1px solid var(--border); color: var(--text-dim);
+  }
+  .locked-empty { font-size: 12px; color: var(--text-faint); }
+
+  /* quick-button editor rows */
+  .btn-rows { display: flex; flex-direction: column; gap: 8px; }
+  .btn-row { display: grid; grid-template-columns: 1fr 1.4fr auto auto; gap: 8px; align-items: center; }
+  .btn-row input[type=text] {
+    background: var(--bg); border: 1px solid var(--border-2);
+    border-radius: var(--radius-sm); color: var(--text);
+    padding: 8px 10px; font-size: 12.5px; width: 100%;
+  }
+  .btn-row .be-cmd { font-family: 'JetBrains Mono', monospace; }
+  .btn-row input:focus { outline: none; border-color: var(--accent); }
+  .be-confirm { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-dim); cursor: pointer; user-select: none; white-space: nowrap; }
+  .be-confirm input { accent-color: var(--accent); width: 14px; height: 14px; }
+
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+  .modal-err { color: var(--red); font-size: 12.5px; min-height: 16px; margin-top: 4px; }
+
+  /* update note (topbar) + footer controls */
+  .update-note {
+    font-family: 'JetBrains Mono', monospace; font-size: 11.5px;
+    color: var(--text-dim); cursor: pointer; text-decoration: none;
+    border: 1px solid var(--border-2); border-radius: var(--radius-sm);
+    padding: 7px 12px; transition: all 0.16s ease; white-space: nowrap;
+    background: transparent;
+  }
+  .update-note:hover { border-color: var(--accent); color: var(--text); }
+  .update-note.has-update {
+    color: var(--green); border-color: var(--green);
+  }
+  .update-note.has-update:hover { color: #fff; }
+
+  .foot-ctrls { display: flex; align-items: center; gap: 14px; }
+  .dbg-toggle {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; color: var(--text-faint); cursor: pointer; user-select: none;
+  }
+  .dbg-toggle input { accent-color: var(--accent); width: 13px; height: 13px; cursor: pointer; }
+  .dbg-toggle:hover { color: var(--text-dim); }
+
+  /* scrollbars */
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 8px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3a4658; }
+  ::-webkit-scrollbar-track { background: transparent; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- top bar -->
+  <div class="topbar">
+    <div class="brand">
+      <div class="mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#042b27" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+        </svg>
+      </div>
+      <div>
+        <h1>Simple RCON Tool</h1>
+        <div class="sub">RCON &middot; In-memory &middot; Local</div>
+      </div>
+    </div>
+    <div class="top-actions">
+      <a class="update-note" id="updateNote" title="Check GitHub for a newer release">Check for updates</a>
+      <button class="btn ghost" id="addBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        Add Server
+      </button>
+      <button class="btn danger ghost" id="endAllBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18.36 6.64A9 9 0 1 1 5.64 6.64M12 2v10"/></svg>
+        Disconnect All
+      </button>
+    </div>
+  </div>
+
+  <!-- servers -->
+  <div class="servers">
+    <div class="col-head"><h2>Servers</h2></div>
+    <div class="server-list" id="serverList"></div>
+    <div class="col-foot">
+      <span id="footVersion">Simple RCON Tool</span>
+      <div class="foot-ctrls">
+        <label class="dbg-toggle" title="Write a Debug_Log_*.txt next to the app for this run. Off by default; no credentials are written.">
+          <input type="checkbox" id="dbgToggle" />
+          Debug log
+        </label>
+        <a href="https://github.com/JDE-Projects" target="_blank" rel="noopener">JDE-Projects</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- console -->
+  <div class="console-wrap">
+    <div class="console-head">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="lights"><i></i><i></i><i></i></div>
+        <h2>Console</h2>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn tiny ghost" id="exportBtn">Export</button>
+        <button class="btn tiny ghost" id="clearBtn">Clear</button>
+      </div>
+    </div>
+    <div class="console" id="console">
+      <div class="console-empty">Connect to a server to begin. Responses appear here.</div>
+    </div>
+  </div>
+</div>
+
+<!-- server editor modal -->
+<div class="overlay" id="modal">
+  <div class="modal">
+    <h3 id="modalTitle">Add Server</h3>
+    <p class="hint">Pick the game to load its built-in buttons. Only the name, host, port, game and any custom buttons are saved. The RCON password is never stored; you enter it when you connect.</p>
+    <input type="hidden" id="fId" />
+    <div class="field">
+      <label>Game</label>
+      <select id="fGame"></select>
+      <p class="game-note" id="gameNote"></p>
+    </div>
+    <div class="field">
+      <label>Display Name</label>
+      <input type="text" id="fName" placeholder="e.g. Main Palworld" />
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label>Host / IP Address</label>
+        <input type="text" id="fHost" placeholder="server address" />
+      </div>
+      <div class="field">
+        <label>RCON Port</label>
+        <input type="text" id="fPort" placeholder="from AMP" />
+      </div>
+    </div>
+    <div class="field">
+      <label class="lock-label">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        Built-in Buttons
+      </label>
+      <div class="locked-preview" id="lockedPreview"></div>
+    </div>
+    <div class="field">
+      <label>Your Custom Buttons</label>
+      <div class="btn-rows" id="btnEditor"></div>
+      <button class="btn ghost tiny" id="addBtnRow" style="margin-top:8px;">+ Add button</button>
+      <p class="hint" style="margin-top:8px;margin-bottom:0;">
+        Put <code>{arg}</code> in a command to be asked for a value when clicked
+        (e.g. <code>Broadcast {arg}</code>). Tick <strong>confirm</strong> for destructive commands.
+      </p>
+    </div>
+    <div class="modal-err" id="modalErr"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="cancelBtn">Cancel</button>
+      <button class="btn primary" id="saveBtn">Save Server</button>
+    </div>
+  </div>
+</div>
+
+<!-- confirm modal -->
+<div class="overlay" id="confirm">
+  <div class="modal" style="width:380px;">
+    <h3 id="confirmTitle">Are you sure?</h3>
+    <p class="hint" id="confirmMsg"></p>
+    <div class="modal-actions">
+      <button class="btn ghost" id="confirmNo">Cancel</button>
+      <button class="btn primary" id="confirmYes">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- prompt modal (for {arg} commands) -->
+<div class="overlay" id="prompt">
+  <div class="modal" style="width:420px;">
+    <h3 id="promptTitle">Input needed</h3>
+    <p class="hint" id="promptHint"></p>
+    <div class="field">
+      <label id="promptLabel">Value</label>
+      <input type="text" id="promptInput" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="promptNo">Cancel</button>
+      <button class="btn primary" id="promptYes">Send</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  let SERVERS = [];
+  let CATALOG = [];
+  let CAT_BY_KEY = {};
+  let confirmCb = null;
+  let promptCb = null;
+  const MAX_LINES = 1500;
+
+  const PROTO_LABEL = {
+    websocket: 'WebSocket RCON',
+    telnet: 'Telnet',
+    battleye: 'BattlEye RCON',
+    https: 'HTTPS API',
+  };
+
+  const $ = (id) => document.getElementById(id);
+  const consoleEl = $('console');
+
+  function api() { return window.pywebview.api; }
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  }
+
+  function gameOf(srv) { return CAT_BY_KEY[srv.game] || null; }
+  function protoOf(srv) { const g = gameOf(srv); return g ? g.protocol : 'source'; }
+  // built-in (locked) buttons + the server's own custom buttons, in that order
+  function combinedButtons(srv) {
+    const g = gameOf(srv);
+    const locked = (g && g.buttons) ? g.buttons : [];
+    const custom = (srv.buttons || []).map(b => Object.assign({_custom: true}, b));
+    return locked.concat(custom);
+  }
+
+  // ---- console ----
+  function addLine(text, level, srvName, serverId) {
+    const empty = consoleEl.querySelector('.console-empty');
+    if (empty) empty.remove();
+    const ln = document.createElement('div');
+    ln.className = 'ln ' + (level || 'out');
+    if (serverId) ln.dataset.server = serverId;
+    const d = new Date();
+    const t = d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    const tag = srvName ? `${srvName} · ${t}` : t;
+    ln.innerHTML = '<span class="tag"></span><span class="msg"></span>';
+    ln.querySelector('.tag').textContent = tag;
+    ln.querySelector('.msg').textContent = text;
+    consoleEl.appendChild(ln);
+    while (consoleEl.children.length > MAX_LINES) consoleEl.removeChild(consoleEl.firstChild);
+    consoleEl.scrollTop = consoleEl.scrollHeight;
+  }
+
+  // ---- events from Python ----
+  window.__onPyEvent = function(channel, payload) {
+    if (channel === 'log') {
+      const s = SERVERS.find(x => x.id === payload.serverId);
+      addLine(payload.text, payload.level, s ? s.name : null, payload.serverId);
+    } else if (channel === 'status') {
+      setStatus(payload.serverId, payload.state);
+    }
+  };
+
+  function setStatus(serverId, state) {
+    const card = document.querySelector(`[data-card="${serverId}"]`);
+    if (!card) return;
+    const ctrls = card.querySelectorAll('.actions-wrap .btn:not([data-disconnect]), .actions-wrap input');
+    if (state === 'running') {
+      ctrls.forEach(b => b.disabled = true);
+    } else {
+      ctrls.forEach(b => b.disabled = false);
+    }
+    if (state === 'idle') card.classList.remove('connected');
+  }
+
+  // ---- render server cards ----
+  function render() {
+    const list = $('serverList');
+    list.innerHTML = '';
+    if (!SERVERS.length) {
+      list.innerHTML = '<div class="console-empty" style="margin-top:30px;">No servers yet. Click “Add Server”.</div>';
+      return;
+    }
+    SERVERS.forEach(srv => {
+      const g = gameOf(srv);
+      const proto = protoOf(srv);
+      const staged = proto !== 'source';
+      const gameName = g ? g.name : 'Unknown game';
+
+      const card = document.createElement('div');
+      card.className = 'card' + (staged ? ' staged' : '');
+      card.dataset.card = srv.id;
+
+      const all = combinedButtons(srv);
+      const quick = all.map((b, i) => {
+        let cls = 'btn quick-btn';
+        if (b.confirm) cls += ' confirm-btn';
+        if (b._custom) cls += ' custom-btn';
+        return `<button class="${cls}" data-qbtn="${i}">${esc(b.label)}</button>`;
+      }).join('');
+      const quickHtml = quick || '<div class="quick-empty">No buttons for this game yet. Use the edit icon to add custom ones.</div>';
+
+      const badge = staged
+        ? `<span class="badge soon">soon · ${esc(PROTO_LABEL[proto] || proto)}</span>`
+        : '';
+
+      const connectBlock = staged
+        ? `<div class="coming-soon">${esc(gameName)} uses ${esc(PROTO_LABEL[proto] || proto)}. This build connects Source RCON games only; a client for this protocol is coming in a later update.</div>`
+        : `<div class="pw-row">
+             <input type="password" placeholder="RCON password (not saved)" data-pw />
+             <button class="btn primary" data-connect>Connect</button>
+           </div>`;
+
+      card.innerHTML = `
+        <div class="card-top">
+          <div>
+            <div class="card-name"><span class="dot"></span>${esc(srv.name)} ${badge}</div>
+            <div class="card-meta">${esc(gameName)} &middot; ${esc(srv.host)}:${esc(srv.port)}</div>
+          </div>
+          <div class="card-icons">
+            <button class="icon-btn" data-edit title="Edit">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4v16h16v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
+            </button>
+            <button class="icon-btn" data-del title="Delete">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+            </button>
+          </div>
+        </div>
+
+        ${connectBlock}
+
+        <div class="actions-wrap">
+          <div class="quick-grid">${quickHtml}</div>
+          <div class="custom-row">
+            <input type="text" placeholder="Type a command…" data-custom />
+            <button class="btn" data-run>Send</button>
+          </div>
+          <div class="card-footer">
+            <button class="btn danger ghost" data-disconnect>Disconnect</button>
+          </div>
+        </div>
+      `;
+      list.appendChild(card);
+      wireCard(card, srv);
+    });
+  }
+
+  function wireCard(card, srv) {
+    const id = srv.id;
+    card.querySelector('[data-edit]').onclick = () => openEditor(srv);
+    card.querySelector('[data-del]').onclick = () => {
+      askConfirm('Delete server?', `Remove “${srv.name}” from the list?`, async () => {
+        const r = await api().delete_server(id);
+        SERVERS = r.servers; render();
+      });
+    };
+
+    const connectBtn = card.querySelector('[data-connect]');
+    if (connectBtn) {
+      connectBtn.onclick = async () => {
+        const pwEl = card.querySelector('[data-pw]');
+        const pw = pwEl.value;
+        connectBtn.disabled = true; connectBtn.textContent = 'Connecting…';
+        const r = await api().connect(id, pw);
+        connectBtn.disabled = false; connectBtn.textContent = 'Connect';
+        if (r.ok) {
+          pwEl.value = '';
+          card.classList.add('connected');
+        } else {
+          addLine(r.error, 'err', srv.name, srv.id);
+        }
+      };
+      card.querySelector('[data-pw]').addEventListener('keydown', e => {
+        if (e.key === 'Enter') connectBtn.click();
+      });
+    }
+
+    card.querySelector('[data-disconnect]').onclick = async () => {
+      await api().disconnect(id);
+      card.classList.remove('connected');
+    };
+
+    // quick buttons (locked + custom, indexed into the combined array)
+    const all = combinedButtons(srv);
+    card.querySelectorAll('[data-qbtn]').forEach(b => {
+      b.onclick = () => {
+        const btnDef = all[parseInt(b.dataset.qbtn, 10)];
+        if (!btnDef) return;
+        const fire = (value) => {
+          let cmd = btnDef.command;
+          if (cmd.includes('{arg}')) {
+            let v = value == null ? '' : value;
+            if (btnDef.argmode === 'underscore') v = v.replace(/ /g, '_');
+            cmd = cmd.split('{arg}').join(v);
+          }
+          api().send(id, cmd, btnDef.label);
+        };
+        const go = () => {
+          if (btnDef.command.includes('{arg}')) {
+            askPrompt(btnDef.label, 'Enter the value for this command.', fire);
+          } else {
+            fire(null);
+          }
+        };
+        if (btnDef.confirm) askConfirm(btnDef.label, btnDef.confirm, go);
+        else go();
+      };
+    });
+
+    // custom command box
+    const runCustom = () => {
+      const input = card.querySelector('[data-custom]');
+      const cmd = input.value;
+      if (!cmd.trim()) return;
+      api().send(id, cmd, cmd.trim());
+      input.value = '';
+    };
+    card.querySelector('[data-run]').onclick = runCustom;
+    card.querySelector('[data-custom]').addEventListener('keydown', e => {
+      if (e.key === 'Enter') runCustom();
+    });
+  }
+
+  // ---- editor modal ----
+  let editButtons = [];
+
+  function populateGameSelect() {
+    const sel = $('fGame');
+    sel.innerHTML = '<option value="">Select a game…</option>';
+    CATALOG.forEach(g => {
+      const staged = g.protocol !== 'source';
+      const opt = document.createElement('option');
+      opt.value = g.key;
+      opt.textContent = staged ? `${g.name}  (soon · ${PROTO_LABEL[g.protocol] || g.protocol})` : g.name;
+      sel.appendChild(opt);
+    });
+  }
+
+  function refreshGameInfo() {
+    const key = $('fGame').value;
+    const g = CAT_BY_KEY[key];
+    const note = $('gameNote');
+    const prev = $('lockedPreview');
+    if (!g) {
+      note.textContent = '';
+      note.className = 'game-note';
+      prev.innerHTML = '<div class="locked-empty">Pick a game to see its built-in buttons.</div>';
+      return;
+    }
+    const staged = g.protocol !== 'source';
+    note.textContent = g.note || '';
+    note.className = 'game-note' + (staged ? ' soon' : '');
+    const chips = (g.buttons || []).map(b => `<span class="locked-chip">${esc(b.label)}</span>`).join('');
+    prev.innerHTML = chips || '<div class="locked-empty">No built-in buttons for this game.</div>';
+  }
+
+  function renderBtnEditor() {
+    const wrap = $('btnEditor');
+    wrap.innerHTML = '';
+    if (!editButtons.length) {
+      wrap.innerHTML = '<div class="quick-empty">No custom buttons. Click “Add button” to add your own.</div>';
+      return;
+    }
+    editButtons.forEach((b, i) => {
+      const row = document.createElement('div');
+      row.className = 'btn-row';
+      row.innerHTML = `
+        <input type="text" class="be-label" placeholder="Label" />
+        <input type="text" class="be-cmd" placeholder="Command" />
+        <label class="be-confirm"><input type="checkbox" class="be-conf" /> confirm</label>
+        <button class="icon-btn be-del" title="Remove">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+        </button>`;
+      row.querySelector('.be-label').value = b.label || '';
+      row.querySelector('.be-cmd').value = b.command || '';
+      row.querySelector('.be-conf').checked = !!b.confirm;
+      row.querySelector('.be-label').oninput = e => editButtons[i].label = e.target.value;
+      row.querySelector('.be-cmd').oninput   = e => editButtons[i].command = e.target.value;
+      row.querySelector('.be-conf').onchange  = e => editButtons[i].confirm = e.target.checked ? 'Run this command?' : false;
+      row.querySelector('.be-del').onclick    = () => { editButtons.splice(i, 1); renderBtnEditor(); };
+      wrap.appendChild(row);
+    });
+  }
+
+  function openEditor(srv) {
+    $('modalTitle').textContent = srv ? 'Edit Server' : 'Add Server';
+    $('fId').value   = srv ? srv.id : '';
+    $('fGame').value = srv ? (srv.game || '') : '';
+    $('fName').value = srv ? srv.name : '';
+    $('fHost').value = srv ? srv.host : '';
+    $('fPort').value = srv ? srv.port : '';
+    editButtons = srv ? JSON.parse(JSON.stringify(srv.buttons || [])) : [];
+    refreshGameInfo();
+    renderBtnEditor();
+    $('modalErr').textContent = '';
+    $('modal').classList.add('show');
+    $('fGame').focus();
+  }
+  function closeEditor() { $('modal').classList.remove('show'); }
+
+  $('fGame').onchange = () => {
+    refreshGameInfo();
+    // helpfully prefill the name with the game name when adding a new server
+    if (!$('fId').value && !$('fName').value.trim()) {
+      const g = CAT_BY_KEY[$('fGame').value];
+      if (g) $('fName').value = g.name;
+    }
+  };
+
+  $('addBtn').onclick = () => openEditor(null);
+  $('cancelBtn').onclick = closeEditor;
+  $('addBtnRow').onclick = () => { editButtons.push({label:'', command:'', confirm:false}); renderBtnEditor(); };
+
+  $('saveBtn').onclick = async () => {
+    const game = $('fGame').value;
+    const name = $('fName').value.trim();
+    const host = $('fHost').value.trim();
+    const port = $('fPort').value.trim();
+    if (!game) { $('modalErr').textContent = 'Pick a game from the list.'; return; }
+    if (!name || !host || !port) {
+      $('modalErr').textContent = 'Name, host and port are all required.';
+      return;
+    }
+    // keep only custom buttons that have both a label and a command
+    const buttons = editButtons
+      .map(b => ({ label: (b.label||'').trim(), command: (b.command||'').trim(), confirm: b.confirm || false }))
+      .filter(b => b.label && b.command);
+
+    const server = { id: $('fId').value || null, game, name, host, port, buttons };
+    const r = await api().save_server(server);
+    if (!r.ok) { $('modalErr').textContent = r.error || 'Save failed.'; return; }
+    SERVERS = r.servers; render(); closeEditor();
+  };
+
+  // ---- confirm modal ----
+  function askConfirm(title, msg, cb) {
+    $('confirmTitle').textContent = title;
+    $('confirmMsg').textContent = msg;
+    confirmCb = cb;
+    $('confirm').classList.add('show');
+  }
+  $('confirmNo').onclick = () => { $('confirm').classList.remove('show'); confirmCb = null; };
+  $('confirmYes').onclick = () => {
+    $('confirm').classList.remove('show');
+    if (confirmCb) confirmCb();
+    confirmCb = null;
+  };
+
+  // ---- prompt modal ----
+  function askPrompt(title, hint, cb) {
+    $('promptTitle').textContent = title;
+    $('promptHint').textContent = hint || '';
+    $('promptLabel').textContent = 'Value';
+    const input = $('promptInput');
+    input.value = '';
+    promptCb = cb;
+    $('prompt').classList.add('show');
+    setTimeout(() => input.focus(), 50);
+  }
+  $('promptNo').onclick = () => { $('prompt').classList.remove('show'); promptCb = null; };
+  $('promptYes').onclick = () => {
+    const val = $('promptInput').value;
+    $('prompt').classList.remove('show');
+    if (promptCb) promptCb(val);
+    promptCb = null;
+  };
+  $('promptInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('promptYes').click(); });
+
+  // ---- top actions ----
+  $('endAllBtn').onclick = () => {
+    askConfirm('Disconnect all?', 'Disconnect every server and clear all passwords from memory.', async () => {
+      await api().disconnect_all();
+      document.querySelectorAll('.card').forEach(c => c.classList.remove('connected'));
+    });
+  };
+  $('clearBtn').onclick = () => {
+    consoleEl.innerHTML = '<div class="console-empty">Console cleared.</div>';
+  };
+  $('exportBtn').onclick = async () => {
+    const lines = Array.from(consoleEl.querySelectorAll('.ln')).map(ln => {
+      const tag = ln.querySelector('.tag').textContent;
+      const msg = ln.querySelector('.msg').textContent;
+      return `${tag}  ${msg}`;
+    });
+    if (!lines.length) { addLine('Nothing to export yet.', 'muted'); return; }
+    const r = await api().export_console('RCON', lines.join('\n') + '\n');
+    if (r.ok) addLine(`Console exported: ${r.name}`, 'ok');
+    else addLine('Export failed: ' + (r.error || 'unknown error'), 'err');
+  };
+
+  // ---- update check + debug toggle ----
+  let UPDATE_URL = null;
+
+  function setUpdateNote(text, kind, url) {
+    const el = $('updateNote');
+    el.textContent = text;
+    el.classList.toggle('has-update', kind === 'update');
+    UPDATE_URL = url || null;
+  }
+
+  async function checkUpdates(manual) {
+    const el = $('updateNote');
+    if (manual) el.textContent = 'Checking…';
+    try {
+      const r = await api().check_update();
+      if (r && r.update) {
+        setUpdateNote(`Update available: v${r.version} →`, 'update', r.url);
+        if (manual) addLine(`Update available: v${r.version}. Open the link in the top bar.`, 'ok');
+      } else if (manual) {
+        if (r && r.offline) { setUpdateNote('Offline', null); addLine('Could not reach GitHub (offline?).', 'muted'); }
+        else { setUpdateNote(`Up to date (v${(r && r.current) || ''})`, null); addLine('You are on the latest version.', 'muted'); }
+      } else {
+        // quiet startup result with no update: leave the default label
+        setUpdateNote('Check for updates', null);
+      }
+    } catch (e) {
+      if (manual) { setUpdateNote('Check for updates', null); addLine('Update check failed.', 'muted'); }
+    }
+  }
+
+  $('updateNote').onclick = () => {
+    if (UPDATE_URL) { window.open(UPDATE_URL, '_blank', 'noopener'); return; }
+    checkUpdates(true);
+  };
+
+  $('dbgToggle').onchange = async (e) => {
+    const on = e.target.checked;
+    try {
+      const r = await api().set_debug(on);
+      e.target.checked = !!(r && r.debug);
+      addLine(e.target.checked
+        ? 'Debug log on. A Debug_Log_*.txt is being written next to the app for this run.'
+        : 'Debug log off.', 'muted');
+    } catch (err) {
+      e.target.checked = false;
+      addLine('Could not change the debug log setting.', 'err');
+    }
+  };
+
+  // ---- boot ----
+  let booted = false;
+  async function boot() {
+    if (booted) return;
+    if (!(window.pywebview && window.pywebview.api && window.pywebview.api.get_config)) return;
+    booted = true;
+    try {
+      const cfg = await api().get_config();
+      SERVERS = cfg.servers || [];
+      CATALOG = cfg.catalog || [];
+      CAT_BY_KEY = Object.fromEntries(CATALOG.map(g => [g.key, g]));
+      if (cfg.version) $('footVersion').textContent = `Simple RCON Tool v${cfg.version}`;
+      $('dbgToggle').checked = !!cfg.debug;
+      populateGameSelect();
+      render();
+      checkUpdates(false);  // quiet startup check; silent when offline
+    } catch (e) {
+      addLine('Boot error: ' + e, 'err');
+    }
+  }
+  window.addEventListener('pywebviewready', boot);
+  setTimeout(boot, 5000);
+</script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+# Pinned build dependencies for Simple RCON Tool.
+# Versions match the JDE pilot's green CI build (Python 3.14, 2026-06-17).
+# Dependabot opens review-PRs here when newer releases appear.
+pywebview==6.2.1
+PySide6==6.11.1
+qtpy==2.4.3
+pyinstaller==6.21.0

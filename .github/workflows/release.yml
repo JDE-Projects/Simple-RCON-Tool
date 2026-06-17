@@ -1,0 +1,16 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+jobs:
+  release:
+    uses: JDE-Projects/Build-Tools/.github/workflows/release.yml@5685053b491735d538823f672727e671966471a2 # Build-Tools main
+    permissions:
+      id-token: write
+      attestations: write
+      contents: write
+    with:
+      app_name: SimpleRCONTool
+      dist_subfolder: "Simple RCON Tool"
+      python_version: "3.14"
+      build_command: "Build_Simple_RCON_Tool.bat"

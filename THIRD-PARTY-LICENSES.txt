@@ -1,0 +1,21 @@
+Simple RCON Tool: Third-Party Licenses
+=========================================
+
+This build bundles the libraries and fonts below. The notice line plus a
+source link is provided for each; full license texts are not reproduced here.
+
+# Always bundled (every app)
+PySide6 / Qt      LGPL-3.0       qt.io/licensing
+pywebview         BSD-3-Clause   github.com/r0x0r/pywebview
+Sora (font)       OFL-1.1        github.com/sora-xor/sora-font
+JetBrains Mono    OFL-1.1        github.com/JetBrains/JetBrainsMono
+
+# Required font notices
+Sora            Copyright 2019 The Sora Project Authors
+JetBrains Mono  Copyright 2020 The JetBrains Mono Project Authors
+
+# Note
+Simple RCON Tool's RCON client uses only the Python standard library, so no
+per-app third-party library is bundled beyond the always-bundled block above.
+The Qt libraries are shipped via PySide6 (LGPL) in an --onedir build so they
+remain replaceable.
