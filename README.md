@@ -4,6 +4,8 @@ A standalone desktop tool to send game-server RCON commands. Pick a game, fill i
 
 Built by [JDE-Projects](https://github.com/JDE-Projects).
 
+If you enjoyed this project and would like to buy me a coffee, check out my [Ko-fi](https://ko-fi.com/jdeprojects).
+
 ## Highlights
 
 - **Game catalog with built-in commands.** Choose a game when adding a server and it loads a set of verified RCON command buttons for that game.
