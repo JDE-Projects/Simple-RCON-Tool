@@ -38,8 +38,8 @@ import webview
 # Version & update source
 # ----------------------------------------------------------------------------
 # APP_VERSION is the version of record; it equals the latest published release
-# tag (without the leading "v"). Held at 1.0.0 while in pre-release testing.
-APP_VERSION = "1.0.0"
+# tag (without the leading "v"). Bumped to 1.1.0 for the installer release.
+APP_VERSION = "1.1.0"
 
 # Update check hits this repo's GitHub Releases. Returns 404 while the repo is
 # private (pre-release), which the check treats as "no update" and stays quiet.
