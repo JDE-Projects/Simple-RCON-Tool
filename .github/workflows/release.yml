@@ -4,7 +4,7 @@ on:
     tags: ['v*']
 jobs:
   release:
-    uses: JDE-Projects/Build-Tools/.github/workflows/release.yml@69d4592847db552d34c49f36b8be2eb9e1af091d # Build-Tools main
+    uses: JDE-Projects/Build-Tools/.github/workflows/release.yml@eed764c87cfe34d1ff38aa159855e92d43b8cb00 # Build-Tools: installer + empty-folder-on-uninstall fix
     permissions:
       id-token: write
       attestations: write
@@ -14,3 +14,4 @@ jobs:
       dist_subfolder: "Simple RCON Tool"
       python_version: "3.14"
       build_command: "Build_Simple_RCON_Tool.bat"
+      app_id: "bd83904f-6fac-414c-970a-7a9b2d5fb66e" # stable per-app installer GUID; generated once, never reuse or change
