@@ -36,6 +36,25 @@
     --purple:    #b48cff;
     --radius:    14px;
     --radius-sm: 9px;
+    --btn-text:  #042b27;
+  }
+
+  /* JDE Light Teal (opt-in via body.light) */
+  body.light {
+    --bg:#eef3f4; --bg-2:#e4ebed; --panel:#ffffff; --panel-2:#f5f9fa;
+    --border:#d3dee1; --border-2:#bcccd0;
+    --text:#16212c; --text-dim:#4f606d; --text-faint:#8593a0;
+    --accent:#178577; --accent-2:#0f6b5f; --glow:rgba(23,133,119,0.20);
+    --amber:#e0900a; --red:#cf3b50; --green:#1c9560; --blue:#2b6fd0; --purple:#6f48cf;
+    --btn-text:#ffffff;
+  }
+
+  /* light-mode page background (softer glows) */
+  body.light {
+    background:
+      radial-gradient(900px 500px at 12% -10%, rgba(23,133,119,0.08), transparent 60%),
+      radial-gradient(800px 500px at 100% 0%, rgba(43,111,208,0.06), transparent 55%),
+      var(--bg);
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -58,11 +77,12 @@
   /* ---- layout ---- */
   .app {
     display: grid;
-    grid-template-rows: auto 1fr;
+    grid-template-rows: auto 1fr auto;
     grid-template-columns: 1fr 1fr;
     grid-template-areas:
       "top  top"
-      "left right";
+      "left right"
+      "bot  bot";
     height: 100vh;
     gap: 16px;
     padding: 18px;
@@ -105,10 +125,10 @@
   .btn svg { width: 15px; height: 15px; }
   .btn.primary {
     background: linear-gradient(145deg, var(--accent), var(--accent-2));
-    color: #042b27; border: none; font-weight: 600;
+    color: var(--btn-text); border: none; font-weight: 600;
     box-shadow: 0 4px 18px var(--glow);
   }
-  .btn.primary:hover { filter: brightness(1.08); color: #042b27; }
+  .btn.primary:hover { filter: brightness(1.08); color: var(--btn-text); }
   .btn.ghost { background: transparent; }
   .btn.danger:hover { border-color: var(--red); color: var(--red); }
   .btn.tiny { padding: 6px 10px; font-size: 12px; }
@@ -141,14 +161,6 @@
     overflow-y: auto; padding: 4px 14px 14px;
     display: flex; flex-direction: column; gap: 12px;
   }
-  .col-foot {
-    padding: 10px 18px; border-top: 1px solid var(--border);
-    font-size: 11px; color: var(--text-faint);
-    display: flex; align-items: center; justify-content: space-between;
-  }
-  .col-foot a { color: var(--text-dim); text-decoration: none; font-family: 'JetBrains Mono', monospace; }
-  .col-foot a:hover { color: var(--accent); }
-
   .card {
     background: var(--panel-2);
     border: 1px solid var(--border);
@@ -324,27 +336,54 @@
   .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
   .modal-err { color: var(--red); font-size: 12.5px; min-height: 16px; margin-top: 4px; }
 
-  /* update note (topbar) + footer controls */
-  .update-note {
-    font-family: 'JetBrains Mono', monospace; font-size: 11.5px;
-    color: var(--text-dim); cursor: pointer; text-decoration: none;
-    border: 1px solid var(--border-2); border-radius: var(--radius-sm);
-    padding: 7px 12px; transition: all 0.16s ease; white-space: nowrap;
-    background: transparent;
+  /* ---- theme toggle ---- */
+  .theme-btn {
+    background:transparent; border:1px solid var(--border-2); border-radius:var(--radius-sm);
+    width:36px; height:36px; display:flex; align-items:center; justify-content:center;
+    cursor:pointer; color:var(--text-dim); transition:.15s; flex:0 0 auto;
   }
-  .update-note:hover { border-color: var(--accent); color: var(--text); }
-  .update-note.has-update {
-    color: var(--green); border-color: var(--green);
-  }
-  .update-note.has-update:hover { color: #fff; }
+  .theme-btn:hover { border-color:var(--accent); color:var(--accent); transform:translateY(-1px); }
+  .theme-btn svg { width:18px; height:18px; }
+  .icon-moon { display:none; }
+  body.light .icon-sun { display:none; }
+  body.light .icon-moon { display:block; }
 
-  .foot-ctrls { display: flex; align-items: center; gap: 14px; }
-  .dbg-toggle {
-    display: flex; align-items: center; gap: 6px;
-    font-size: 11px; color: var(--text-faint); cursor: pointer; user-select: none;
+  /* ---- bottom bar ---- */
+  .bottom-bar {
+    grid-area: bot;
+    height: 44px;
+    background: var(--bg-2);
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 18px;
   }
-  .dbg-toggle input { accent-color: var(--accent); width: 13px; height: 13px; cursor: pointer; }
-  .dbg-toggle:hover { color: var(--text-dim); }
+  .bottom-bar .bar-left,
+  .bottom-bar .bar-right { display: flex; align-items: center; gap: 10px; flex: none; }
+  .bottom-bar .bar-center { flex: 1; display: flex; align-items: center; justify-content: center; }
+
+  .dbg-toggle { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; user-select: none; }
+  .dbg-toggle input { position: absolute; opacity: 0; pointer-events: none; }
+  .dbg-track { width: 32px; height: 17px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--border-2); position: relative; transition: all 0.14s; }
+  .dbg-track::after { content: ''; position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; border-radius: 50%; background: var(--text-faint); transition: all 0.14s; }
+  .dbg-toggle input:checked + .dbg-track { background: var(--accent); border-color: var(--accent); }
+  .dbg-toggle input:checked + .dbg-track::after { left: 16px; background: #042b27; }
+  .dbg-label { font-size: 11.5px; color: var(--text-dim); }
+
+  #updateNotice { font-size: 11.5px; color: var(--text-dim); transition: opacity 0.5s ease; }
+  #updateNotice a { color: var(--accent); text-decoration: none; font-weight: 500; }
+  #updateNotice a:hover { text-decoration: underline; }
+  #verLabel { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-faint); }
+  #updateBtn {
+    font-family: inherit; font-size: 11.5px; font-weight: 500; color: var(--text-dim);
+    background: transparent; border: 1px solid var(--border-2);
+    border-radius: var(--radius-sm); padding: 4px 10px;
+    cursor: pointer; transition: all 0.15s; white-space: nowrap;
+  }
+  #updateBtn:hover { border-color: var(--accent); color: var(--text); transform: translateY(-1px); }
+  #updateBtn:active { transform: translateY(0); }
+  #updateBtn:disabled { opacity: 0.38; cursor: not-allowed; transform: none; }
 
   /* scrollbars */
   ::-webkit-scrollbar { width: 9px; height: 9px; }
@@ -370,7 +409,15 @@
       </div>
     </div>
     <div class="top-actions">
-      <a class="update-note" id="updateNote" title="Check GitHub for a newer release">Check for updates</a>
+      <button class="theme-btn" id="theme-btn" onclick="toggleTheme()" title="Toggle theme">
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+          <circle cx="12" cy="12" r="4"/>
+          <path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/>
+        </svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>
+        </svg>
+      </button>
       <button class="btn ghost" id="addBtn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
         Add Server
@@ -386,16 +433,6 @@
   <div class="servers">
     <div class="col-head"><h2>Servers</h2></div>
     <div class="server-list" id="serverList"></div>
-    <div class="col-foot">
-      <span id="footVersion">Simple RCON Tool</span>
-      <div class="foot-ctrls">
-        <label class="dbg-toggle" title="Write a Debug_Log_*.txt next to the app for this run. Off by default; no credentials are written.">
-          <input type="checkbox" id="dbgToggle" />
-          Debug log
-        </label>
-        <a href="https://github.com/JDE-Projects" target="_blank" rel="noopener">JDE-Projects</a>
-      </div>
-    </div>
   </div>
 
   <!-- console -->
@@ -412,6 +449,24 @@
     </div>
     <div class="console" id="console">
       <div class="console-empty">Connect to a server to begin. Responses appear here.</div>
+    </div>
+  </div>
+
+  <!-- bottom bar -->
+  <div class="bottom-bar">
+    <div class="bar-left">
+      <label class="dbg-toggle" title="Write a Debug_Log_*.txt next to the app for this run. Off by default; no credentials are written.">
+        <input type="checkbox" id="dbgToggle" />
+        <span class="dbg-track"></span>
+        <span class="dbg-label">Debug log</span>
+      </label>
+    </div>
+    <div class="bar-center">
+      <span id="updateNotice"></span>
+    </div>
+    <div class="bar-right">
+      <span id="verLabel"></span>
+      <button id="updateBtn">Check for updates</button>
     </div>
   </div>
 </div>
@@ -881,41 +936,57 @@
     else addLine('Export failed: ' + (r.error || 'unknown error'), 'err');
   };
 
-  // ---- update check + debug toggle ----
-  let UPDATE_URL = null;
-
-  function setUpdateNote(text, kind, url) {
-    const el = $('updateNote');
-    el.textContent = text;
-    el.classList.toggle('has-update', kind === 'update');
-    UPDATE_URL = url || null;
+  // ---- theme ----
+  let currentTheme = "dark";
+  function applyTheme(theme){
+    currentTheme = theme;
+    document.body.classList.toggle("light", theme === "light");
   }
+  async function toggleTheme(){
+    const next = currentTheme === "light" ? "dark" : "light";
+    applyTheme(next);
+    if(window.pywebview && window.pywebview.api) await window.pywebview.api.save_theme(next);
+  }
+  async function initTheme(){ if(!(window.pywebview && window.pywebview.api)) return;
+    try{ const t = await window.pywebview.api.get_theme(); applyTheme(t || "dark"); }catch(e){} }
+  window.addEventListener("pywebviewready", initTheme);
 
-  async function checkUpdates(manual) {
-    const el = $('updateNote');
-    if (manual) el.textContent = 'Checking…';
+  // ---- update check ----
+  $('updateBtn').onclick = async () => {
+    const btn    = $('updateBtn');
+    const notice = $('updateNotice');
+    btn.disabled = true;
+    btn.textContent = 'Checking…';
+    notice.style.opacity = '1';
+    notice.innerHTML = '';
     try {
       const r = await api().check_update();
       if (r && r.update) {
-        setUpdateNote(`Update available: v${r.version} →`, 'update', r.url);
-        if (manual) addLine(`Update available: v${r.version}. Open the link in the top bar.`, 'ok');
-      } else if (manual) {
-        if (r && r.offline) { setUpdateNote('Offline', null); addLine('Could not reach GitHub (offline?).', 'muted'); }
-        else { setUpdateNote(`Up to date (v${(r && r.current) || ''})`, null); addLine('You are on the latest version.', 'muted'); }
+        notice.innerHTML = 'Update available: <a href="https://github.com/JDE-Projects/Simple-RCON-Tool/blob/main/README.md#updating" target="_blank" rel="noopener">v' + esc(r.version) + '</a>';
+      } else if (r && r.offline) {
+        notice.textContent = "Couldn’t reach GitHub";
+        fadeNotice();
       } else {
-        // quiet startup result with no update: leave the default label
-        setUpdateNote('Check for updates', null);
+        notice.textContent = 'No updates found';
+        fadeNotice();
       }
     } catch (e) {
-      if (manual) { setUpdateNote('Check for updates', null); addLine('Update check failed.', 'muted'); }
+      notice.textContent = "Couldn’t reach GitHub";
+      fadeNotice();
     }
-  }
-
-  $('updateNote').onclick = () => {
-    if (UPDATE_URL) { window.open(UPDATE_URL, '_blank', 'noopener'); return; }
-    checkUpdates(true);
+    btn.disabled = false;
+    btn.textContent = 'Check for updates';
   };
 
+  function fadeNotice() {
+    const notice = $('updateNotice');
+    setTimeout(() => {
+      notice.style.opacity = '0';
+      setTimeout(() => { notice.textContent = ''; notice.style.opacity = '1'; }, 500);
+    }, 5000);
+  }
+
+  // ---- debug toggle ----
   $('dbgToggle').onchange = async (e) => {
     const on = e.target.checked;
     try {
@@ -941,11 +1012,19 @@
       SERVERS = cfg.servers || [];
       CATALOG = cfg.catalog || [];
       CAT_BY_KEY = Object.fromEntries(CATALOG.map(g => [g.key, g]));
-      if (cfg.version) $('footVersion').textContent = `Simple RCON Tool v${cfg.version}`;
+      if (cfg.version) $('verLabel').textContent = `v${cfg.version}`;
       $('dbgToggle').checked = !!cfg.debug;
       populateGameSelect();
       render();
-      checkUpdates(false);  // quiet startup check; silent when offline
+
+      // quiet startup update check; only show if an update is available
+      try {
+        const r = await api().check_update();
+        if (r && r.update) {
+          const notice = $('updateNotice');
+          notice.innerHTML = 'Update available: <a href="https://github.com/JDE-Projects/Simple-RCON-Tool/blob/main/README.md#updating" target="_blank" rel="noopener">v' + esc(r.version) + '</a>';
+        }
+      } catch (e) { /* silent */ }
     } catch (e) {
       addLine('Boot error: ' + e, 'err');
     }

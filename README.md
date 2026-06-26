@@ -36,6 +36,15 @@ Two ways to get it from the [Releases](../../releases) page - pick one:
 Windows only, no Python or setup required. Unsigned, so SmartScreen may warn the
 first time: **More info > Run anyway**.
 
+## Updating
+
+Simple RCON Tool doesn't update itself. The bottom bar has a **Check for updates** button that tells you when a newer release is out; when it does, get the new version from the [Releases](../../releases) page the same way you first installed it.
+
+- **Installer:** download the new `SimpleRCONTool-vX.Y.Z-setup.exe` and run it. It installs over your current copy and keeps your saved servers and theme choice.
+- **Portable .zip:** download and extract the new `SimpleRCONTool-vX.Y.Z.zip`. To keep your saved servers, copy `servers.json` (and the theme `.pref` file, if present) from the old folder into the new one.
+
+Your RCON passwords are never stored, so there's nothing else to carry over.
+
 ## Build from source (optional)
 
 If you would rather run or build it yourself, you need:

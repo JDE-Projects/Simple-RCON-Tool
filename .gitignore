@@ -9,6 +9,9 @@ servers.json
 # Optional debug logs (written next to the exe when the toggle is on)
 Debug_Log_*.txt
 
+# User preferences (theme choice, persisted next to the exe)
+*.pref
+
 # PyInstaller build output
 build/
 dist/

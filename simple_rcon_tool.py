@@ -38,8 +38,8 @@ import webview
 # Version & update source
 # ----------------------------------------------------------------------------
 # APP_VERSION is the version of record; it equals the latest published release
-# tag (without the leading "v"). Bumped to 1.1.0 for the installer release.
-APP_VERSION = "1.1.0"
+# tag (without the leading "v"). Bumped to 1.2.0: light mode + bottom bar.
+APP_VERSION = "1.2.0"
 
 # Update check hits this repo's GitHub Releases. Returns 404 while the repo is
 # private (pre-release), which the check treats as "no update" and stays quiet.
@@ -569,6 +569,29 @@ class Api:
             "version": APP_VERSION,
             "debug": _debug_enabled,
         }
+
+    # ---- theme persistence --------------------------------------------------
+
+    def _pref_path(self):
+        return os.path.join(app_dir(), "simple_rcon_tool.pref")
+
+    def get_theme(self):
+        try:
+            with open(self._pref_path(), "r", encoding="utf-8") as f:
+                theme = json.load(f).get("theme")
+            return theme if theme in ("dark", "light") else "dark"
+        except Exception:
+            return "dark"
+
+    def save_theme(self, theme):
+        if theme not in ("dark", "light"):
+            return {"ok": False}
+        try:
+            with open(self._pref_path(), "w", encoding="utf-8") as f:
+                json.dump({"theme": theme}, f)
+            return {"ok": True}
+        except Exception:
+            return {"ok": False}
 
     # ---- debug log toggle -------------------------------------------------
 
