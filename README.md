@@ -53,16 +53,28 @@ Simple RCON Tool doesn't update itself. The bottom bar has a **Check for updates
 
 Your RCON passwords are never stored, so there's nothing else to carry over.
 
+## Verify this download (optional)
+
+This release was built on GitHub from this public source, not on a personal
+machine, and is signed with a build-provenance attestation. To confirm your
+download is genuine, install the [GitHub CLI](https://cli.github.com) and run:
+
+```
+gh attestation verify SimpleRCONTool-vX.Y.Z.zip \
+  --repo JDE-Projects/Simple-RCON-Tool \
+  --signer-repo JDE-Projects/Build-Tools
+```
+
+A `Verification succeeded!` line means the file was built by the published
+pipeline from this repo. You can also check the file against the published
+`.sha256`.
+
 ## Build from source (optional)
 
 If you would rather run or build it yourself, you need:
 
 - **Python 3** on the machine's PATH.
-- Python packages: `pywebview`, `PySide6`, `pyinstaller`. Keep `PyQt6` uninstalled so PySide6 is the bundled binding.
-
-```
-pip install pywebview PySide6 pyinstaller
-```
+- `pip install -r requirements.txt` (pinned versions; includes `pywebview`, `PySide6`, `qtpy`, and `pyinstaller`). Keep `PyQt6` uninstalled so PySide6 is the bundled binding.
 
 Keep `simple_rcon_tool.py`, `simple_rcon_tool-UI.html`, the `fonts/` folder, `simple_rcon_tool.ico`, `simple_rcon_tool.png` and `simple_rcon_tool-splash.png` together. Then either:
 
@@ -118,7 +130,7 @@ The catalog also lists games that use other protocols. They appear in the picker
 
 ## A note on how this was built
 
-This project was built with AI assistance. The design decisions, feature direction, game and command research targets, and real-world testing were directed by me. The code was written and revised with an AI assistant against that direction. Treat it like any community tool, review and test it before relying on it.
+This project was built with AI assistance. The design decisions, feature direction, game and command research targets, and real-world testing were directed by me. The code was written and revised with an AI assistant against that direction. Treat it like any community tool: review and test it before relying on it.
 
 ## License
 
