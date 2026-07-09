@@ -125,7 +125,7 @@ The catalog also lists games that use other protocols. They appear in the picker
 ## Security and privacy
 
 - The RCON password is never written to disk.
-- `servers.json` holds only the name, host, port, game key, and custom buttons. Keep it out of source control, since it maps your internal hosts and ports.
+- `servers.json` holds only the name, host, port, game key, and custom buttons. Treat it as sensitive: it maps your internal hosts and ports, so don't share it publicly (in a bug report, forum post, or public repo).
 - The debug log is off by default. When you turn it on, it writes one `Debug_Log_*.txt` next to the app for that run, with no credentials in it.
 
 ## A note on how this was built
