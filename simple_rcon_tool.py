@@ -460,7 +460,7 @@ class RconClient:
             # ignore the mirrored empty packet some servers send first
 
     def command(self, cmd):
-        cmd_id = self._send(self.SERVERDATA_EXECCOMMAND, cmd)
+        self._send(self.SERVERDATA_EXECCOMMAND, cmd)
         sentinel_id = self._send(self.SERVERDATA_RESPONSE_VALUE, "")
         parts = []
         try:
