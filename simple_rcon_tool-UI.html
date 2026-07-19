@@ -964,14 +964,14 @@
       if (r && r.update) {
         notice.innerHTML = 'Update available: <a href="https://github.com/JDE-Projects/Simple-RCON-Tool/blob/main/README.md#updating" target="_blank" rel="noopener">v' + esc(r.version) + '</a>';
       } else if (r && r.offline) {
-        notice.textContent = "Couldn’t reach GitHub";
+        notice.textContent = "Couldn’t reach GitHub to check for updates";
         fadeNotice();
       } else {
-        notice.textContent = 'No updates found';
+        notice.textContent = "You're on the latest version (v" + esc(r.current) + ")";
         fadeNotice();
       }
     } catch (e) {
-      notice.textContent = "Couldn’t reach GitHub";
+      notice.textContent = "Couldn’t reach GitHub to check for updates";
       fadeNotice();
     }
     btn.disabled = false;
