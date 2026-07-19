@@ -23,3 +23,7 @@ __pycache__/
 
 # Local-only test launcher (kept out of the repo on purpose)
 Launch_*.bat
+
+# Local planning notes (kept private, not shared)
+roadmap.md
+status.md
