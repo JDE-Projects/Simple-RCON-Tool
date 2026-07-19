@@ -21,6 +21,7 @@ import sys
 import json
 import time
 import ctypes
+from ctypes import wintypes
 import socket
 import struct
 import threading
@@ -68,6 +69,95 @@ def resource_path(name):
 
 
 SERVERS_FILE = os.path.join(app_dir(), "servers.json")
+
+
+# ----------------------------------------------------------------------------
+# Local prefs store. One JSON file next to the app holds EVERY persisted
+# setting: theme, window geometry, and anything added later. Always read-
+# merge-write through load_prefs / save_prefs. Never overwrite the file with
+# a single key, or the next setting you add silently wipes the others.
+# ----------------------------------------------------------------------------
+
+def _pref_path() -> str:
+    return os.path.join(app_dir(), "simple_rcon_tool.pref")
+
+
+def load_prefs() -> dict:
+    """Load the full prefs dict. Tolerant of a missing or corrupt file."""
+    try:
+        with open(_pref_path(), "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def save_prefs(prefs: dict) -> bool:
+    try:
+        with open(_pref_path(), "w", encoding="utf-8") as f:
+            json.dump(prefs, f)
+        return True
+    except Exception:
+        return False
+
+
+def _win32():
+    u = ctypes.windll.user32
+    u.FindWindowW.restype = wintypes.HWND
+    u.FindWindowW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR]
+    u.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
+    u.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int,
+                               ctypes.c_int, ctypes.c_int, wintypes.UINT]
+    return u
+
+
+def _save_geometry(win) -> None:
+    try:
+        u = _win32()
+        hwnd = u.FindWindowW(None, win.title)
+        if not hwnd:
+            return
+        r = wintypes.RECT()
+        if not u.GetWindowRect(hwnd, ctypes.byref(r)):
+            return
+        x, y, w, h = r.left, r.top, r.right - r.left, r.bottom - r.top
+        if x <= -30000 or y <= -30000:   # minimized sentinel, not a real spot
+            return
+        if w <= 0 or h <= 0:
+            return
+        prefs = load_prefs()
+        prefs["window"] = {"x": x, "y": y, "width": w, "height": h}
+        save_prefs(prefs)
+    except Exception:
+        pass
+
+
+def _restore_geometry(win) -> None:
+    try:
+        geo = load_prefs().get("window")
+        if not isinstance(geo, dict):
+            return
+        x, y, w, h = geo.get("x"), geo.get("y"), geo.get("width"), geo.get("height")
+        for v in (x, y, w, h):
+            if not isinstance(v, int) or isinstance(v, bool):
+                return
+        if w <= 0 or h <= 0:
+            return
+        # Is a point in the title bar still on a connected monitor?
+        point = wintypes.POINT(x + 100, y + 30)
+        user32 = ctypes.windll.user32
+        user32.MonitorFromPoint.argtypes = [wintypes.POINT, wintypes.DWORD]
+        user32.MonitorFromPoint.restype = wintypes.HMONITOR
+        if not user32.MonitorFromPoint(point, 0):   # MONITOR_DEFAULTTONULL
+            return
+        u = _win32()
+        hwnd = u.FindWindowW(None, win.title)
+        if not hwnd:
+            return
+        SWP_NOZORDER, SWP_NOACTIVATE = 0x0004, 0x0010
+        u.SetWindowPos(hwnd, None, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE)
+    except Exception:
+        pass
 
 
 # ----------------------------------------------------------------------------
@@ -572,26 +662,18 @@ class Api:
 
     # ---- theme persistence --------------------------------------------------
 
-    def _pref_path(self):
-        return os.path.join(app_dir(), "simple_rcon_tool.pref")
-
     def get_theme(self):
-        try:
-            with open(self._pref_path(), "r", encoding="utf-8") as f:
-                theme = json.load(f).get("theme")
-            return theme if theme in ("dark", "light") else "dark"
-        except Exception:
-            return "dark"
+        theme = load_prefs().get("theme")
+        return theme if theme in ("dark", "light") else "dark"
 
     def save_theme(self, theme):
         if theme not in ("dark", "light"):
             return {"ok": False}
-        try:
-            with open(self._pref_path(), "w", encoding="utf-8") as f:
-                json.dump({"theme": theme}, f)
+        prefs = load_prefs()
+        prefs["theme"] = theme
+        if save_prefs(prefs):
             return {"ok": True}
-        except Exception:
-            return {"ok": False}
+        return {"ok": False}
 
     # ---- debug log toggle -------------------------------------------------
 
@@ -862,6 +944,13 @@ def main():
         background_color="#0a0e14",
     )
     api.window = window
+
+    window.events.shown += lambda: _restore_geometry(window)
+
+    def _on_closing():
+        _save_geometry(window)
+        return True
+    window.events.closing += _on_closing
 
     def on_loaded():
         api.frontend_ready = True
