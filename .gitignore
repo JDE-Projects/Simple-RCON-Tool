@@ -20,6 +20,7 @@ dist/
 # Python cache
 __pycache__/
 *.pyc
+.venv/
 
 # Local-only test launcher (kept out of the repo on purpose)
 Launch_*.bat
