@@ -27,6 +27,7 @@ import struct
 import threading
 import urllib.request
 import urllib.error
+import webbrowser
 
 # Bind to PySide6 (LGPL), never PyQt6 (GPL). Set before webview imports Qt so
 # qtpy resolves to PySide6 even if PyQt6 happens to be present.
@@ -46,6 +47,7 @@ APP_VERSION = "1.4.1"
 # private (pre-release), which the check treats as "no update" and stays quiet.
 GITHUB_OWNER = "JDE-Projects"
 GITHUB_REPO = "Simple-RCON-Tool"
+JDE_PROJECTS_URL = "https://github.com/JDE-Projects"
 
 
 # ----------------------------------------------------------------------------
@@ -649,6 +651,18 @@ class Api:
 
     def _log(self, server_id, text, level="out"):
         self._emit("log", {"serverId": server_id, "text": text, "level": level})
+
+    def open_url(self, url):
+        """Open the approved project URL in the user's default browser."""
+        if url != JDE_PROJECTS_URL:
+            return {"ok": False, "error": "URL is not allowed."}
+        try:
+            if webbrowser.open(url):
+                return {"ok": True}
+        except Exception as e:
+            debug_log(f"Could not open project URL: {e}")
+            return {"ok": False, "error": "Could not open the browser."}
+        return {"ok": False, "error": "Could not open the browser."}
 
     # ---- config -----------------------------------------------------------
 
