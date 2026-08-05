@@ -20,9 +20,11 @@ import re
 import sys
 import json
 import time
+import errno
 import ctypes
 from ctypes import wintypes
 import socket
+import ssl
 import struct
 import threading
 import urllib.request
@@ -41,7 +43,7 @@ import webview
 # ----------------------------------------------------------------------------
 # APP_VERSION is the version of record; it equals the release tag without the
 # leading "v".
-APP_VERSION = "1.4.2"
+APP_VERSION = "1.4.3"
 
 # Update check hits this repo's GitHub Releases. Returns 404 while the repo is
 # private (pre-release), which the check treats as "no update" and stays quiet.
@@ -672,6 +674,76 @@ def save_servers(servers):
         return False
 
 
+def _update_error_reason(exc: BaseException) -> str:
+    """Turn a check_update exception into a short, plain-language reason to
+    show in the UI. Pure and network-free: takes the already-raised exception,
+    never touches the network itself.
+
+    Each branch is specific to a failure that can actually cause it, and
+    names a next step where there is a sensible one. Subclasses are checked
+    before their parents: SSLCertVerificationError and SSLEOFError/
+    SSLZeroReturnError before the generic ssl.SSLError, and the specific
+    ConnectionError subclasses and socket.gaierror before the generic OSError
+    branch (socket.timeout is an alias of TimeoutError, and both are OSError
+    subclasses)."""
+    # HTTPError is a URLError subclass but carries its own .code, so classify
+    # it before unwrapping anything.
+    if isinstance(exc, urllib.error.HTTPError):
+        if exc.code == 403:
+            return (
+                "GitHub is rate-limiting update checks from this network. "
+                "Try again later."
+            )
+        if exc.code == 404:
+            return "No published release was found."
+        if 500 <= exc.code < 600:
+            return f"GitHub is having trouble on its end (HTTP {exc.code})."
+        return f"GitHub returned an error (HTTP {exc.code})."
+
+    if isinstance(exc, json.JSONDecodeError):
+        return (
+            "GitHub returned something unexpected. This often means a proxy "
+            "or a guest wifi sign-in page answered instead."
+        )
+
+    # A plain URLError wraps the underlying cause (ssl.SSLError, socket.timeout,
+    # a DNS/socket OSError, ...) in its .reason; unwrap it to classify the
+    # actual cause, but remember it came from a URLError for the fallback below.
+    is_url_error = isinstance(exc, urllib.error.URLError)
+    cause = exc.reason if is_url_error and exc.reason is not None else exc
+
+    if isinstance(cause, ssl.SSLCertVerificationError):
+        return (
+            "GitHub's certificate could not be verified. This usually means "
+            "antivirus or a network filter is inspecting HTTPS traffic."
+        )
+    if isinstance(cause, (ssl.SSLEOFError, ssl.SSLZeroReturnError)):
+        return "The secure connection was cut off during the handshake with GitHub."
+    if isinstance(cause, ssl.SSLError):
+        return "The secure connection to GitHub failed."
+    if isinstance(cause, socket.gaierror):
+        return (
+            "The address for api.github.com could not be looked up. Check "
+            "DNS or the internet connection."
+        )
+    if isinstance(cause, (socket.timeout, TimeoutError)):
+        return "GitHub didn't respond in time."
+    if isinstance(cause, (ConnectionRefusedError, ConnectionResetError)):
+        return (
+            "The connection was refused or reset. A firewall or proxy may "
+            "be blocking it."
+        )
+    if isinstance(cause, OSError) and getattr(cause, "errno", None) == errno.ENETUNREACH:
+        return "No network connection."
+    if is_url_error:
+        return "Couldn't reach GitHub. Check the internet connection."
+
+    text = f"{type(exc).__name__}: {exc}"
+    if len(text) > 120:
+        text = text[:117] + "..."
+    return text
+
+
 # ----------------------------------------------------------------------------
 # API exposed to the JavaScript frontend
 # ----------------------------------------------------------------------------
@@ -745,33 +817,32 @@ class Api:
     # ---- update check -----------------------------------------------------
 
     def check_update(self):
-        """Compare the latest GitHub release tag to APP_VERSION. Quiet when
-        offline or while the repo is private (404). Never raises to the UI."""
-        url = (f"https://api.github.com/repos/{GITHUB_OWNER}/"
-               f"{GITHUB_REPO}/releases/latest")
+        """Compare the latest published release to APP_VERSION. Quiet in the UI
+        on failure (see _update_error_reason), but always logged when debug is
+        on."""
+        result = {"ok": True, "current": APP_VERSION, "version": None,
+                  "update": False, "offline": False}
         try:
+            url = (f"https://api.github.com/repos/{GITHUB_OWNER}/"
+                   f"{GITHUB_REPO}/releases/latest")
             req = urllib.request.Request(url, headers={
                 "Accept": "application/vnd.github+json",
                 "User-Agent": "Simple-RCON-Tool",
             })
-            with urllib.request.urlopen(req, timeout=6) as r:
+            with urllib.request.urlopen(req, timeout=10) as r:
                 data = json.loads(r.read().decode("utf-8"))
             tag = (data.get("tag_name") or "").lstrip("v")
+            result["version"] = tag
             if tag and _version_gt(tag, APP_VERSION):
-                return {
-                    "ok": True, "update": True, "version": tag,
-                    "current": APP_VERSION,
-                    "url": data.get("html_url") or
-                           f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}/releases",
-                }
-            return {"ok": True, "update": False, "current": APP_VERSION}
-        except urllib.error.HTTPError as e:
-            debug_log(f"update check HTTP {e.code} (private repo returns 404)")
-            return {"ok": True, "update": False, "current": APP_VERSION}
+                result["update"] = True
+                result["url"] = (data.get("html_url") or
+                                  f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}/releases")
+            debug_log(f"check_update: found v{tag}, current v{APP_VERSION}")
         except Exception as e:
-            debug_log(f"update check failed (offline?): {e}")
-            return {"ok": True, "update": False, "current": APP_VERSION,
-                    "offline": True}
+            result["offline"] = True
+            result["reason"] = _update_error_reason(e)
+            debug_log(f"check_update failed: {type(e).__name__}: {e}")
+        return result
 
     # ---- server CRUD ------------------------------------------------------
 
@@ -976,6 +1047,18 @@ def _prompt_second_instance(app_title: str) -> bool:
         return True   # fail open: if the box can't be shown, launch proceeds
 
 def main():
+    # Use the Windows certificate store for TLS instead of the bundled CA list,
+    # so antivirus/network filters that inject their own root cert (common on
+    # managed laptops) don't break the GitHub update check. Runs before the
+    # Api object exists, so there's no logger yet to record a fallback; if
+    # truststore is missing or fails, urllib silently keeps using its default
+    # bundled CA list instead.
+    try:
+        import truststore
+        truststore.inject_into_ssl()
+    except Exception:
+        pass
+
     global IS_SECOND_INSTANCE
     if not _acquire_single_instance("JDE_SimpleRCONTool_SingleInstance"):
         if not _prompt_second_instance("Simple RCON Tool"):

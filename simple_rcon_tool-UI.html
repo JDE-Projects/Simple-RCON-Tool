@@ -554,6 +554,17 @@
   </div>
 </div>
 
+<!-- update-check error modal -->
+<div class="overlay" id="updateErrModal">
+  <div class="modal" style="width:420px;">
+    <h3>Couldn't check for updates</h3>
+    <div id="updateErrMsg"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeUpdateErrorModal()">Close</button>
+    </div>
+  </div>
+</div>
+
 <script>
   let SERVERS = [];
   let CATALOG = [];
@@ -980,15 +991,17 @@
       if (r && r.update) {
         notice.innerHTML = 'Update available: <a href="https://github.com/JDE-Projects/Simple-RCON-Tool/blob/main/README.md#updating" target="_blank" rel="noopener">v' + esc(r.version) + '</a>';
       } else if (r && r.offline) {
-        notice.textContent = "Couldn’t reach GitHub to check for updates";
+        notice.textContent = "Couldn't reach GitHub to check for updates.";
         fadeNotice();
+        openUpdateErrorModal(r.reason || "The app couldn't run the update check.");
       } else {
         notice.textContent = "You're on the latest version (v" + esc(r.current) + ")";
         fadeNotice();
       }
     } catch (e) {
-      notice.textContent = "Couldn’t reach GitHub to check for updates";
+      notice.textContent = "Couldn't reach GitHub to check for updates.";
       fadeNotice();
+      openUpdateErrorModal("The app couldn't run the update check.");
     }
     btn.disabled = false;
     btn.textContent = 'Check for updates';
@@ -1000,6 +1013,14 @@
       notice.style.opacity = '0';
       setTimeout(() => { notice.textContent = ''; notice.style.opacity = '1'; }, 500);
     }, 5000);
+  }
+
+  function openUpdateErrorModal(reason) {
+    $('updateErrMsg').textContent = reason;
+    $('updateErrModal').classList.add('show');
+  }
+  function closeUpdateErrorModal() {
+    $('updateErrModal').classList.remove('show');
   }
 
   // ---- debug toggle ----
