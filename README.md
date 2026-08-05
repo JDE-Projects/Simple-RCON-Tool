@@ -74,7 +74,7 @@ pipeline from this repo. You can also check the file against the published
 If you would rather run or build it yourself, you need:
 
 - **Python 3** on the machine's PATH.
-- `pip install -r requirements.txt` (pinned versions; includes `pywebview`, `PySide6`, `qtpy`, and `pyinstaller`). Keep `PyQt6` uninstalled so PySide6 is the bundled binding.
+- `pip install -r requirements.txt` (pinned versions; includes `pywebview`, `PySide6`, `qtpy`, `pyinstaller`, and `truststore`). Keep `PyQt6` uninstalled so PySide6 is the bundled binding.
 
 Keep `simple_rcon_tool.py`, `simple_rcon_tool-UI.html`, the `fonts/` folder, `simple_rcon_tool.ico`, `simple_rcon_tool.png` and `simple_rcon_tool-splash.png` together. Then either:
 

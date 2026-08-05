@@ -83,6 +83,7 @@ python -m PyInstaller --noconfirm --onedir --windowed ^
     --add-data "fonts;fonts" ^
     --collect-all PySide6 ^
     --collect-all qtpy ^
+    --hidden-import truststore ^
     simple_rcon_tool.py
 
 if not %errorlevel%==0 (
