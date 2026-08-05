@@ -43,7 +43,7 @@ import webview
 # ----------------------------------------------------------------------------
 # APP_VERSION is the version of record; it equals the release tag without the
 # leading "v".
-APP_VERSION = "1.4.2"
+APP_VERSION = "1.4.3"
 
 # Update check hits this repo's GitHub Releases. Returns 404 while the repo is
 # private (pre-release), which the check treats as "no update" and stays quiet.
