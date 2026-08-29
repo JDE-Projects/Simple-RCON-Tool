@@ -95,7 +95,7 @@ if not %errorlevel%==0 (
 )
 
 rem --- ship the public docs and required third-party notices next to the exe ---
-for %%F in ("README.md" "LICENSE" "THIRD-PARTY-LICENSES.txt") do (
+for %%F in ("README.md" "LICENSE" "THIRD-PARTY-LICENSES.txt" "LICENSE.LGPL-3.0.txt" "LICENSE.GPL-3.0.txt") do (
     if not exist "%%~F" (
         echo.
         echo Build succeeded, but required release file %%~F is missing.

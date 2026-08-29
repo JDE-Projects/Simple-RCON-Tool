@@ -2,7 +2,7 @@
 
 A standalone desktop tool to send game-server RCON commands. Pick a game, fill in the host and port, type the RCON password when you connect, and use one-tap command buttons or a free command box. The interface is a clean web-style window.
 
-Built by [JDE-Projects](https://github.com/JDE-Projects).
+Built by [JDE-Projects](https://jde-projects.com), home of the Simple X Tools suite.
 
 If you enjoyed this project and would like to buy me a coffee, check out my [Ko-fi](https://ko-fi.com/jdeprojects).
 
@@ -127,6 +127,7 @@ The catalog also lists games that use other protocols. They appear in the picker
 - The RCON password is never written to disk.
 - `servers.json` holds only the name, host, port, game key, and custom buttons. Treat it as sensitive: it maps your internal hosts and ports, so don't share it publicly (in a bug report, forum post, or public repo).
 - The debug log is off by default. When you turn it on, it writes one `Debug_Log_*.txt` next to the app for that run, with no credentials in it.
+- **Network use.** Other than the job you ask of it, this app makes one automatic network call: a check to GitHub for a newer release (at startup and when you press **Check for updates**), which sends only a version request. It collects and sends no personal data, usage data, or analytics.
 
 ## A note on how this was built
 
