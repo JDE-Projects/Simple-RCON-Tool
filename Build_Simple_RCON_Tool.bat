@@ -94,30 +94,10 @@ if not %errorlevel%==0 (
     exit /b 1
 )
 
-rem --- ship the public docs and required third-party notices next to the exe ---
-for %%F in ("README.md" "LICENSE" "THIRD-PARTY-LICENSES.txt" "LICENSE.LGPL-3.0.txt" "LICENSE.GPL-3.0.txt") do (
-    if not exist "%%~F" (
-        echo.
-        echo Build succeeded, but required release file %%~F is missing.
-        echo.
-        %PAUSE%
-        exit /b 1
-    )
-    copy /y "%%~F" "dist\Simple RCON Tool\%%~F" >nul
-    if errorlevel 1 (
-        echo.
-        echo Could not copy required release file %%~F into the app folder.
-        echo.
-        %PAUSE%
-        exit /b 1
-    )
-)
-
 echo.
 echo ===========================================================================
 echo  Done. Your app folder is:  dist\Simple RCON Tool\
-echo  Run dist\Simple RCON Tool\Simple RCON Tool.exe to test, then zip the
-echo  whole "Simple RCON Tool" folder and attach it to the repo's Releases page.
+echo  Run dist\Simple RCON Tool\Simple RCON Tool.exe to test.
 echo ===========================================================================
 echo.
 %PAUSE%
