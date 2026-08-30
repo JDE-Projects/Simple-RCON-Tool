@@ -97,8 +97,7 @@ if not %errorlevel%==0 (
 echo.
 echo ===========================================================================
 echo  Done. Your app folder is:  dist\Simple RCON Tool\
-echo  Run dist\Simple RCON Tool\Simple RCON Tool.exe to test, then zip the
-echo  whole "Simple RCON Tool" folder and attach it to the repo's Releases page.
+echo  Run dist\Simple RCON Tool\Simple RCON Tool.exe to test.
 echo ===========================================================================
 echo.
 %PAUSE%
