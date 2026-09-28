@@ -1,0 +1,12 @@
+{
+  "entry": "simple_rcon_tool.py",
+  "mutex": "JDE_SimpleRCONTool_SingleInstance",
+  "window_title": "Simple RCON Tool",
+  "page_url_contains": "simple_rcon_tool-UI.html",
+  "scenarios": {
+    "smoke": {
+      "script": "tools/ui_check/smoke.js",
+      "timeout_s": 120
+    }
+  }
+}
