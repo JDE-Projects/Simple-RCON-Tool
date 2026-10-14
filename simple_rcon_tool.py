@@ -424,7 +424,7 @@ GAME_CATALOG = [
         "buttons": [
             {"label": "Players", "command": "/players"},
             {"label": "Admins", "command": "/admins"},
-            {"label": "Save", "command": "/save"},
+            {"label": "Save", "command": "/server-save"},
             {"label": "Bans", "command": "/bans"},
             {"label": "Kick", "command": "/kick {arg}"},
             {"label": "Ban", "command": "/ban {arg}", "confirm": "Ban this player?"},
