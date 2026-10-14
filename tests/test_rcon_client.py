@@ -5,7 +5,7 @@ import time
 
 import pytest
 
-from simple_rcon_tool import RconClient, RconError, game_uses_sentinel
+from simple_rcon_tool import RconClient, RconError, Session, game_uses_sentinel
 
 
 def _packet(req_id, type_, body):
@@ -164,26 +164,28 @@ def test_no_sentinel_reads_packet_split_beyond_idle_gap(client_factory, split_at
     assert client.command("status") == "firstsecond"
 
 
-def test_no_sentinel_close_mid_packet_raises_rcon_error(client_factory):
+@pytest.mark.parametrize("sentinel", [True, False])
+def test_close_mid_packet_raises_rcon_error(client_factory, sentinel):
     def handler(conn):
         command_id, _, _ = _recv_packet(conn)
         response = _packet(command_id, RconClient.SERVERDATA_AUTH_RESPONSE, "reply")
         conn.sendall(response[:8])
         conn.shutdown(socket.SHUT_WR)
 
-    client = client_factory(handler, sentinel=False)
+    client = client_factory(handler, sentinel=sentinel)
     with pytest.raises(RconError, match="Connection closed by server"):
         client.command("status")
 
 
-def test_no_sentinel_timeout_mid_packet_raises_rcon_error(client_factory):
+@pytest.mark.parametrize("sentinel", [True, False])
+def test_timeout_mid_packet_raises_rcon_error(client_factory, sentinel):
     def handler(conn):
         command_id, _, _ = _recv_packet(conn)
         response = _packet(command_id, RconClient.SERVERDATA_AUTH_RESPONSE, "reply")
         conn.sendall(response[:8])
         time.sleep(1.1)
 
-    client = client_factory(handler, sentinel=False)
+    client = client_factory(handler, sentinel=sentinel)
     with pytest.raises(RconError, match="Timed out while receiving packet"):
         client.command("status")
 
@@ -204,3 +206,12 @@ def test_game_uses_sentinel_for_flagged_source_and_unknown_games():
     assert game_uses_sentinel("factorio") is False
     assert game_uses_sentinel("gmod") is True
     assert game_uses_sentinel("unknown") is True
+
+
+@pytest.mark.parametrize(
+    ("game", "expected"),
+    [("valheim", False), ("windrose", False), ("factorio", False), ("gmod", True)],
+)
+def test_session_passes_game_sentinel_flag_to_client(game, expected):
+    server = {"host": "127.0.0.1", "port": 27015, "game": game}
+    assert Session(server, "password").client.sentinel is expected
