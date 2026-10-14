@@ -1,0 +1,6 @@
+{
+  "minecraft_server": {"name": "Minecraft server", "version": "26.3", "url": "https://piston-data.mojang.com/v1/objects/33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c/server.jar", "sha1": "33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c", "file_name": "server.jar"},
+  "temurin_jre": {"name": "Eclipse Temurin JRE", "version": "25.0.4+1", "url": "https://github.com/adoptium/temurin25-binaries/releases/download/jdk-25.0.4.1%2B1/OpenJDK25U-jre_x64_windows_hotspot_25.0.4.1_1.zip", "sha256": "4c95451cea98556def2c54f7782933f52a26d4a36bd85e1d59f0364464828b07", "file_name": "temurin-jre.zip"},
+  "bepinexpack": {"name": "BepInExPack for Valheim", "version": "5.4.2351", "url": "https://gcdn.thunderstore.io/live/repository/packages/denikson-BepInExPack_Valheim-5.4.2351.zip", "sha256": "bce631497976a93977ceb08e166712e6c31d15244956f89f17df092a9b62e29f", "file_name": "BepInExPack_Valheim.zip"},
+  "valheim_rcon": {"name": "ValheimRcon", "version": "1.6.2", "url": "https://gcdn.thunderstore.io/live/repository/packages/Tristan-ValheimRcon-1.6.2.zip", "sha256": "6723eb1f7543bb6ca6304852fc1ebf94ac77b25270c52f4c046c325f05143ada", "file_name": "ValheimRcon.zip"}
+}
