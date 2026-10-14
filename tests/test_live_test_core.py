@@ -19,6 +19,13 @@ def test_definitions_match_real_catalog_in_both_directions():
         validate_definition(CATALOG_BY_KEY["minecraft"], {"checks": []})
 
 
+def test_definition_refuses_checks_without_an_expected_result():
+    catalog = {"buttons": [{"label": "Who Is", "command": "whois {arg}"}, {"label": "Kick", "command": "kick {arg}"}]}
+    with pytest.raises(LiveTestError, match="Who Is"):
+        validate_definition(catalog, {"checks": [{"label": "Who Is", "expect": {}},
+                                                 {"label": "Kick", "player_required": True}]})
+
+
 def test_argument_filling_matches_ui_including_underscore_mode():
     assert fill_command({"command": "say {arg} {arg}"}, "two words") == "say two words two words"
     assert fill_command({"command": "Broadcast {arg}", "argmode": "underscore"}, "two words") == "Broadcast two_words"
@@ -28,6 +35,7 @@ def test_argument_filling_matches_ui_including_underscore_mode():
     ("expectation", "reply", "error", "evidence", "status"),
     [({}, "", None, True, "fail"), ({}, "reply", TimeoutError(), True, "fail"),
      ({"player_required": True}, "accepted", None, True, "unverified"),
+     ({"player_required": True}, "", ConnectionAbortedError(), True, "fail"),
      ({"reply": "ok"}, "ok", None, True, "pass"),
      ({"disconnect": True}, "", ConnectionError(), True, "pass")],
 )
@@ -83,6 +91,17 @@ def test_run_checks_uses_core_argument_filling(monkeypatch, tmp_path):
                                                        "command": "Broadcast {arg}", "expect": {}}])
     assert FakeSession.commands == ["Broadcast two_words"]
     assert records[0]["status"] == "pass"
+
+
+def test_probes_run_first_and_are_recorded_ungraded(monkeypatch, tmp_path):
+    FakeSession.reply, FakeSession.error, FakeSession.commands, FakeSession.log_path = "", None, [], None
+    monkeypatch.setattr(run, "Session", FakeSession)
+    definition = {"catalog_key": "fake", "rcon_port": 1, "probes": ["help"], "timeouts": {"check": 20, "stop": 1},
+                  "checks": [{"label": "List", "expect": {}}]}
+    catalog = {"buttons": [{"label": "List", "command": "list"}]}
+    records = run.run_checks(definition, catalog, "pw", tmp_path, tmp_path / "server.log", ExitedProcess())
+    assert FakeSession.commands == ["help", "list"]
+    assert [row["status"] for row in records] == ["info", "fail"]
 
 
 def test_say_empty_reply_requires_log_evidence(monkeypatch, tmp_path):
@@ -228,3 +247,9 @@ def test_first_boot_shuts_down_cleanly_or_fails(monkeypatch, tmp_path):
     monkeypatch.setattr(run, "start_server", lambda *args: (args[4].write(b"Loading: Done\n"), args[4].flush(), stuck)[2])
     with pytest.raises(LiveTestError, match="did not shut down cleanly"):
         run.first_boot(definition, tmp_path, tmp_path, "pw", job=None)
+
+
+def test_ready_fails_fast_when_server_has_exited():
+    definition = {"timeouts": {"start": 600}, "rcon_port": 1, "catalog_key": "fake", "loopback_supported": True}
+    with pytest.raises(LiveTestError, match="exited with code 2 before RCON was ready"):
+        run.ready(definition, "pw", None, _FakeProcess(returncode=2))

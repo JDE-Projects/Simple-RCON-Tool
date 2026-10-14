@@ -101,6 +101,16 @@ def run_checks(definition: dict, catalog: dict, password: str, run_dir: Path, lo
     records = []
     try:
         session.connect()
+        # Probes are raw commands recorded for research (syntax, help text), never graded.
+        for command in definition.get("probes", []):
+            started, reply, error = time.time(), "", None
+            try:
+                reply = session.command(command)
+            except Exception as exc:
+                error = exc
+            records.append({"label": f"probe: {command}", "status": "info", "expected": {}, "actual": reply,
+                            "evidence": "recorded, not graded", "timing_seconds": round(time.time() - started, 3),
+                            "exception": str(error) if error else None})
         for check in definition["checks"]:
             button, started, started_monotonic = buttons[check["label"]], time.time(), time.monotonic()
             token = secrets.token_hex(4)
@@ -139,10 +149,12 @@ def run_checks(definition: dict, catalog: dict, password: str, run_dir: Path, lo
     return records
 
 
-def ready(definition: dict, password: str, job: WindowsJob) -> None:
+def ready(definition: dict, password: str, job: WindowsJob, process: subprocess.Popen) -> None:
     deadline = time.monotonic() + definition["timeouts"]["start"]
     last_error = None
     while time.monotonic() < deadline:
+        if process.poll() is not None:
+            raise LiveTestError(f"server exited with code {process.returncode} before RCON was ready")
         probe = Session({"host": "127.0.0.1", "port": definition["rcon_port"], "game": definition["catalog_key"]}, password)
         try:
             probe.connect()
@@ -161,7 +173,9 @@ def ready(definition: dict, password: str, job: WindowsJob) -> None:
 
 def start_server(definition: dict, root: Path, run_dir: Path, password: str, log, job: WindowsJob) -> subprocess.Popen:
     # Own process group so a console Ctrl+Break reaches only the server.
-    process = subprocess.Popen(definition["launch"](root, run_dir, password), cwd=run_dir, stdout=log,
+    # Some servers only start from their install folder; "cwd" picks the folder, else the run folder.
+    cwd = definition["cwd"](root, run_dir) if definition.get("cwd") else run_dir
+    process = subprocess.Popen(definition["launch"](root, run_dir, password), cwd=cwd, stdout=log,
                                stderr=subprocess.STDOUT, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
     job.assign(process)
     return process
@@ -217,7 +231,7 @@ def run_game(definition: dict, root: Path, skip_update: bool) -> int:
             first_boot(definition, root, run_dir, password, job)
         with log_path.open("wb") as log:
             process = start_server(definition, root, run_dir, password, log, job)
-            ready(definition, password, job)
+            ready(definition, password, job, process)
             isolation_evidence["rcon_listener_owned_by_job"] = True
             isolation_evidence["bind_address"] = "127.0.0.1" if definition["loopback_supported"] else definition["loopback_reason"]
             records = run_checks(definition, catalog, password, run_dir, log_path, process, redactions)
@@ -240,7 +254,7 @@ def run_game(definition: dict, root: Path, skip_update: bool) -> int:
         isolation_evidence["ports_free_after_cleanup"] = free
         if not free:
             lifecycle_error = lifecycle_error or f"ports remain busy after cleanup: {message}"
-    status = "pass" if not lifecycle_error and all(row["status"] in {"pass", "unverified"} for row in records) else "fail"
+    status = "pass" if not lifecycle_error and all(row["status"] in {"pass", "unverified", "info"} for row in records) else "fail"
     result = {"game": definition["name"], "catalog_key": definition["catalog_key"], "date": utc_stamp(), "status": status,
               "isolation": isolation_evidence, "lifecycle_error": lifecycle_error, "checks": records,
               "server_version": definition["server_version"](root), "download_versions": download_versions,
