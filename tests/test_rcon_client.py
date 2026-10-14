@@ -204,13 +204,17 @@ def test_game_uses_sentinel_for_flagged_source_and_unknown_games():
     assert game_uses_sentinel("valheim") is False
     assert game_uses_sentinel("windrose") is False
     assert game_uses_sentinel("factorio") is False
+    assert game_uses_sentinel("minecraft") is False
     assert game_uses_sentinel("gmod") is True
     assert game_uses_sentinel("unknown") is True
 
 
 @pytest.mark.parametrize(
     ("game", "expected"),
-    [("valheim", False), ("windrose", False), ("factorio", False), ("gmod", True)],
+    [
+        ("valheim", False), ("windrose", False), ("factorio", False),
+        ("minecraft", False), ("gmod", True),
+    ],
 )
 def test_session_passes_game_sentinel_flag_to_client(game, expected):
     server = {"host": "127.0.0.1", "port": 27015, "game": game}

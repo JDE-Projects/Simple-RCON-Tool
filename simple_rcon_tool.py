@@ -380,6 +380,7 @@ GAME_CATALOG = [
     },
     {
         "key": "minecraft", "name": "Minecraft (Java)", "protocol": "source",
+        "sentinel": False,
         "note": "Standard Java-edition console commands.",
         "buttons": [
             {"label": "List", "command": "list"},
