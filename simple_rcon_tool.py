@@ -459,13 +459,20 @@ GAME_CATALOG = [
     },
     {
         "key": "eco", "name": "Eco", "protocol": "source",
-        "note": "Loosely Source-compatible (default port 3002). Kick/Ban use a "
-                "Name,Reason format. Test entry; verify against your build.",
+        "sentinel": False,
+        "note": "Default port 3002. RCON stays off until RconPassword is set in "
+                "Configs/Network.eco. Kick/Ban use a Name,Reason format; banning "
+                "a player who never joined needs their Steam or SLG ID. Very "
+                "long replies (such as the full help list) make Eco drop the "
+                "connection.",
         "buttons": [
-            {"label": "Who Is", "command": "whois {arg}"},
+            {"label": "Online Players", "command": "manage players"},
+            {"label": "Save", "command": "manage save"},
             {"label": "Kick", "command": "kick {arg}"},
             {"label": "Ban", "command": "ban {arg}",
              "confirm": "Ban this player? (format: Name,Reason)"},
+            {"label": "Ban List", "command": "ban"},
+            {"label": "Unban", "command": "unban {arg}"},
         ],
     },
     {
