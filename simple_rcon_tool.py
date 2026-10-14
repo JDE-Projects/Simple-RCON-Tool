@@ -490,7 +490,7 @@ GAME_CATALOG = [
             {"label": "Kick", "command": "kick {arg}"},
             {"label": "Ban", "command": "ban {arg}", "confirm": "Ban this player?"},
             {"label": "Unban", "command": "unban {arg}"},
-            {"label": "List Bans", "command": "banned"},
+            {"label": "List Bans", "command": "banlist"},
         ],
     },
 
