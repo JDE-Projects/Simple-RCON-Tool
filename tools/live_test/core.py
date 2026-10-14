@@ -34,6 +34,10 @@ def validate_definition(catalog: dict, definition: dict) -> None:
     missing, unknown = labels - checks, checks - labels
     if missing or unknown:
         raise LiveTestError(f"catalog/check mismatch; missing={sorted(missing)}, unknown={sorted(unknown)}")
+    # A check with nothing to compare against would pass on any reply, even an error.
+    vague = [check["label"] for check in definition["checks"] if not check.get("expect") and not check.get("player_required")]
+    if vague:
+        raise LiveTestError(f"checks without an expected result: {sorted(vague)}")
 
 
 def fresh_password() -> str:
@@ -120,12 +124,12 @@ def parse_appmanifest_build_id(path: Path) -> str | None:
 
 
 def classify_check(expectation: dict, reply: str | None, exception: Exception | None, evidence: bool) -> tuple[str, str]:
-    if expectation.get("player_required"):
-        return "unverified", "requires a live player"
     if expectation.get("disconnect"):
         return ("pass", "disconnect and evidence confirmed") if evidence else ("fail", "disconnect evidence missing")
     if exception:
         return "fail", f"{type(exception).__name__}: {exception}"
+    if expectation.get("player_required"):
+        return "unverified", "requires a live player"
     if not reply and not expectation.get("empty_reply_ok"):
         return "fail", "empty reply"
     pattern = expectation.get("reply")
