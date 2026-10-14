@@ -419,6 +419,7 @@ GAME_CATALOG = [
     },
     {
         "key": "factorio", "name": "Factorio", "protocol": "source",
+        "sentinel": False,
         "note": "Commands use a leading slash. /c runs Lua and disables achievements.",
         "buttons": [
             {"label": "Players", "command": "/players"},
@@ -468,6 +469,7 @@ GAME_CATALOG = [
     },
     {
         "key": "windrose", "name": "Windrose", "protocol": "source",
+        "sentinel": False,
         "note": "Requires the community WindroseRCON mod on the server.",
         "buttons": [
             {"label": "Info", "command": "info"},
@@ -480,6 +482,7 @@ GAME_CATALOG = [
     },
     {
         "key": "valheim", "name": "Valheim", "protocol": "source",
+        "sentinel": False,
         "note": "Requires the ValheimRcon mod. Crossplay must be off "
                 "(BepInEx mods do not load with crossplay on).",
         "buttons": [
@@ -534,11 +537,23 @@ def game_protocol(game_key):
     return g["protocol"] if g else "source"
 
 
+def game_uses_sentinel(game_key):
+    g = CATALOG_BY_KEY.get(game_key)
+    return g.get("sentinel", True) if g else True
+
+
 # ----------------------------------------------------------------------------
 # Source RCON client (standard library only)
 # ----------------------------------------------------------------------------
 
+RCON_REPLY_IDLE_GAP = 0.3
+
+
 class RconError(Exception):
+    pass
+
+
+class _RconIdleTimeout(Exception):
     pass
 
 
@@ -548,11 +563,12 @@ class RconClient:
     SERVERDATA_EXECCOMMAND = 2
     SERVERDATA_RESPONSE_VALUE = 0
 
-    def __init__(self, host, port, password, timeout=8):
+    def __init__(self, host, port, password, timeout=8, *, sentinel=True):
         self.host = host
         self.port = int(port)
         self.password = password  # memory only
         self.timeout = timeout
+        self.sentinel = sentinel
         self.sock = None
         self._id = 0
 
@@ -588,6 +604,36 @@ class RconClient:
         body = data[8:-2]  # strip the two trailing null bytes
         return req_id, type_, body.decode("utf-8", errors="replace")
 
+    def _recv_command_packet(self):
+        header = self.sock.recv(4)
+        if not header:
+            raise RconError("Connection closed by server.")
+        return self._recv_packet_from_header(header)
+
+    def _recv_packet_from_header(self, header):
+        try:
+            header += self._recv_exact(4 - len(header))
+            (length,) = struct.unpack("<i", header)
+            data = self._recv_exact(length)
+        except socket.timeout as exc:
+            raise RconError("Timed out while receiving packet.") from exc
+        req_id, type_ = struct.unpack("<ii", data[:8])
+        body = data[8:-2]  # strip the two trailing null bytes
+        return req_id, type_, body.decode("utf-8", errors="replace")
+
+    def _recv_packet_after_idle_gap(self, idle_timeout, normal_timeout):
+        self.sock.settimeout(idle_timeout)
+        try:
+            try:
+                header = self.sock.recv(4)
+            except socket.timeout as exc:
+                raise _RconIdleTimeout from exc
+        finally:
+            self.sock.settimeout(normal_timeout)
+        if not header:
+            raise RconError("Connection closed by server.")
+        return self._recv_packet_from_header(header)
+
     def _authenticate(self):
         self._send(self.SERVERDATA_AUTH, self.password)
         while True:
@@ -599,17 +645,48 @@ class RconClient:
             # ignore the mirrored empty packet some servers send first
 
     def command(self, cmd):
-        self._send(self.SERVERDATA_EXECCOMMAND, cmd)
-        sentinel_id = self._send(self.SERVERDATA_RESPONSE_VALUE, "")
+        command_id = self._send(self.SERVERDATA_EXECCOMMAND, cmd)
         parts = []
+        normal_timeout = self.sock.gettimeout()
         try:
-            while True:
-                req_id, _, body = self._recv_packet()
-                if req_id == sentinel_id:
-                    break
-                parts.append(body)
-        except socket.timeout:
-            pass  # some servers do not echo the sentinel; return what we have
+            if self.sentinel:
+                sentinel_id = self._send(self.SERVERDATA_RESPONSE_VALUE, "")
+                try:
+                    while True:
+                        req_id, _, body = self._recv_command_packet()
+                        if req_id == sentinel_id:
+                            break
+                        # Any other id counts as reply text: not every server
+                        # echoes the command's id.
+                        parts.append(body)
+                except socket.timeout:
+                    pass  # some servers do not echo the sentinel; return what we have
+            else:
+                try:
+                    while True:
+                        req_id, _, body = self._recv_command_packet()
+                        if req_id == command_id:
+                            parts.append(body)
+                            break
+                except socket.timeout:
+                    return "".join(parts).strip()
+
+                idle_deadline = time.monotonic() + RCON_REPLY_IDLE_GAP
+                while True:
+                    idle_timeout = idle_deadline - time.monotonic()
+                    if idle_timeout <= 0:
+                        break
+                    try:
+                        req_id, _, body = self._recv_packet_after_idle_gap(
+                            idle_timeout, normal_timeout
+                        )
+                    except _RconIdleTimeout:
+                        break
+                    if req_id == command_id:
+                        parts.append(body)
+                        idle_deadline = time.monotonic() + RCON_REPLY_IDLE_GAP
+        finally:
+            self.sock.settimeout(normal_timeout)
         return "".join(parts).strip()
 
     def close(self):
@@ -628,7 +705,10 @@ class RconClient:
 class Session:
     def __init__(self, server, password):
         self.server = server
-        self.client = RconClient(server["host"], server["port"], password)
+        self.client = RconClient(
+            server["host"], server["port"], password,
+            sentinel=game_uses_sentinel(server.get("game")),
+        )
         self.lock = threading.Lock()  # one command at a time per socket
 
     def connect(self):
