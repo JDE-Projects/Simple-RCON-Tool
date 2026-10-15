@@ -208,6 +208,16 @@ def stop_with_ctrl_break(process: subprocess.Popen, timeout: float) -> bool:
         return False
 
 
+def job_emptied(job: WindowsJob, timeout: float) -> bool:
+    """True once every process in the job has exited. Helpers (a crash reporter) may outlive the server briefly."""
+    deadline = time.monotonic() + timeout
+    while job.pids():
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.5)
+    return True
+
+
 def wait_for_log(log_path: Path, text: str, process: subprocess.Popen, timeout: float, stage: str = "first boot") -> None:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -266,7 +276,7 @@ def run_game(definition: dict, root: Path, skip_update: bool) -> int:
                 process.wait(timeout=15)
             except subprocess.TimeoutExpired:
                 lifecycle_error = lifecycle_error or "server did not exit after Job Object termination"
-        if job.pids():
+        if not job_emptied(job, definition["timeouts"]["stop"]):
             lifecycle_error = lifecycle_error or "Job Object still contains processes after cleanup"
         if job.handle:
             job.close()
