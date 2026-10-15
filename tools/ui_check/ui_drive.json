@@ -27,6 +27,11 @@
       "script": "tools/ui_check/squad_console.js",
       "fixture": "tools/ui_check/squad_fixture.py",
       "timeout_s": 480
+    },
+    "ark-se-console": {
+      "script": "tools/ui_check/ark_se_console.js",
+      "fixture": "tools/ui_check/ark_se_fixture.py",
+      "timeout_s": 600
     }
   }
 }
