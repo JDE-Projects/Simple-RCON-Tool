@@ -17,6 +17,11 @@
       "script": "tools/ui_check/pz_console.js",
       "fixture": "tools/ui_check/pz_fixture.py",
       "timeout_s": 480
+    },
+    "ark-asa-console": {
+      "script": "tools/ui_check/ark_asa_console.js",
+      "fixture": "tools/ui_check/ark_asa_fixture.py",
+      "timeout_s": 600
     }
   }
 }
