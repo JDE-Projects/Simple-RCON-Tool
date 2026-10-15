@@ -188,6 +188,74 @@ def test_post_cleanup_port_recheck_fails_run(monkeypatch, tmp_path):
     assert result["isolation"]["ports_free_after_cleanup"] is False
 
 
+@pytest.mark.parametrize("ready_log", [None, "Startup report"])
+def test_ready_log_waits_after_ready_and_before_checks(monkeypatch, tmp_path, ready_log):
+    definition = {"key": "fake", "name": "Fake", "catalog_key": "fake", "ports": [1], "rcon_port": 1,
+                  "loopback_supported": True, "loopback_reason": "", "checks": [], "timeouts": {"start": 7, "stop": 1},
+                  "launch": lambda root, run_dir, password: [],
+                  "configure": lambda root, run_dir, definition, password: None, "server_version": lambda root: "1"}
+    if ready_log:
+        definition["ready_log"] = ready_log
+    calls = []
+    class Job:
+        handle = True
+        def assign(self, process): pass
+        def pids(self): return set()
+        def terminate(self): pass
+        def close(self): self.handle = None
+    class Process:
+        def poll(self): return 0
+        def wait(self, timeout): return 0
+    monkeypatch.setattr(run, "catalog_for", lambda definition: {"buttons": []})
+    monkeypatch.setattr(run, "isolation", lambda definition, root: {"ports_free_before": True})
+    monkeypatch.setattr(run, "WindowsJob", Job)
+    monkeypatch.setattr(run.subprocess, "Popen", lambda *args, **kwargs: Process())
+    monkeypatch.setattr(run, "ready", lambda *args: calls.append("ready"))
+    monkeypatch.setattr(run, "wait_for_log", lambda log_path, text, process, timeout, stage:
+                        calls.append(("wait_for_log", log_path.name, text, timeout, stage)))
+    monkeypatch.setattr(run, "run_checks", lambda *args: calls.append("checks") or [])
+    monkeypatch.setattr(run, "ports_free", lambda ports: (True, ""))
+    monkeypatch.setattr(run, "runner_git_commit", lambda: "unknown")
+    assert run.run_game(definition, tmp_path, True) == 0
+    if ready_log:
+        assert calls == ["ready", ("wait_for_log", "server.log", "Startup report", 7, "startup"), "checks"]
+    else:
+        assert calls == ["ready", "checks"]
+
+
+def test_ready_log_timeout_fails_run_without_checks(monkeypatch, tmp_path):
+    definition = {"key": "fake", "name": "Fake", "catalog_key": "fake", "ports": [1], "rcon_port": 1,
+                  "loopback_supported": True, "loopback_reason": "", "checks": [], "timeouts": {"start": 7, "stop": 1},
+                  "launch": lambda root, run_dir, password: [],
+                  "configure": lambda root, run_dir, definition, password: None, "server_version": lambda root: "1",
+                  "ready_log": "never logged"}
+    class Job:
+        handle = True
+        def assign(self, process): pass
+        def pids(self): return set()
+        def terminate(self): pass
+        def close(self): self.handle = None
+    class Process:
+        def poll(self): return 0
+        def wait(self, timeout): return 0
+    def no_line(*args):
+        raise LiveTestError("startup did not log 'never logged' within 7 seconds")
+    checks = []
+    monkeypatch.setattr(run, "catalog_for", lambda definition: {"buttons": []})
+    monkeypatch.setattr(run, "isolation", lambda definition, root: {"ports_free_before": True})
+    monkeypatch.setattr(run, "WindowsJob", Job)
+    monkeypatch.setattr(run.subprocess, "Popen", lambda *args, **kwargs: Process())
+    monkeypatch.setattr(run, "ready", lambda *args: None)
+    monkeypatch.setattr(run, "wait_for_log", no_line)
+    monkeypatch.setattr(run, "run_checks", lambda *args: checks.append("ran") or [])
+    monkeypatch.setattr(run, "ports_free", lambda ports: (True, ""))
+    monkeypatch.setattr(run, "runner_git_commit", lambda: "unknown")
+    assert run.run_game(definition, tmp_path, True) == 1
+    assert checks == []
+    result = json.loads(next((tmp_path / "runs").glob("*/results.json")).read_text(encoding="utf-8"))
+    assert result["lifecycle_error"] == "startup did not log 'never logged' within 7 seconds"
+
+
 def test_skip_update_still_records_download_and_mod_versions():
     baseline = json.loads((Path(run.__file__).parent / "baseline.json").read_text(encoding="utf-8"))
     downloads, mods = run.recorded_versions(GAMES["valheim"], baseline)
@@ -229,6 +297,10 @@ def test_wait_for_log_finds_text_and_fails_when_server_exits(tmp_path):
     run.wait_for_log(log, "Loading: Done", _FakeProcess(), 5)
     with pytest.raises(LiveTestError, match="exited with code 3"):
         run.wait_for_log(log, "never logged", _FakeProcess(returncode=3), 5)
+    with pytest.raises(LiveTestError, match="exited with code 3 during startup"):
+        run.wait_for_log(log, "never logged", _FakeProcess(returncode=3), 5, "startup")
+    with pytest.raises(LiveTestError, match="^startup did not log 'never logged' within 0 seconds$"):
+        run.wait_for_log(log, "never logged", _FakeProcess(), 0, "startup")
 
 
 def test_first_boot_shuts_down_cleanly_or_fails(monkeypatch, tmp_path):
