@@ -594,6 +594,7 @@ class RconClient:
         self.sock = None
         self._id = 0
         self._last_sent_id = None
+        self._sentinel_ids = set()
 
     def connect(self):
         self.sock = socket.create_connection((self.host, self.port), timeout=self.timeout)
@@ -676,11 +677,14 @@ class RconClient:
         try:
             if self.sentinel:
                 sentinel_id = self._send(self.SERVERDATA_RESPONSE_VALUE, "")
+                self._sentinel_ids.add(sentinel_id)
                 try:
                     while True:
                         req_id, _, body = self._recv_command_packet()
                         if req_id == sentinel_id:
                             break
+                        if req_id in self._sentinel_ids:
+                            continue
                         # Any other id counts as reply text: not every server
                         # echoes the command's id.
                         parts.append(body)

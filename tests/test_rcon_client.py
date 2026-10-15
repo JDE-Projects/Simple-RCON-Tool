@@ -116,6 +116,68 @@ def test_sentinel_mode_keeps_reply_with_other_id(client_factory):
     assert client.command("status") == "reply"
 
 
+def test_sentinel_mode_discards_valve_marker_tail_from_later_replies(client_factory):
+    replies = ("first reply", "", "third reply")
+
+    def handler(conn):
+        for expected_command, reply in zip(("first", "second", "third"), replies, strict=True):
+            _command_id, command_type, command = _recv_packet(conn)
+            sentinel_id, sentinel_type, sentinel_body = _recv_packet(conn)
+            assert command_type == RconClient.SERVERDATA_EXECCOMMAND
+            assert command == expected_command
+            assert sentinel_type == RconClient.SERVERDATA_RESPONSE_VALUE
+            assert sentinel_body == ""
+            if reply:
+                conn.sendall(_packet(0, RconClient.SERVERDATA_RESPONSE_VALUE, reply))
+            conn.sendall(_packet(sentinel_id, RconClient.SERVERDATA_RESPONSE_VALUE, ""))
+            # The last tail is never read; sending it would make Windows reset the socket on close.
+            if expected_command != "third":
+                conn.sendall(_packet(sentinel_id, RconClient.SERVERDATA_RESPONSE_VALUE, "\x00\x01\x00\x00"))
+
+    client = client_factory(handler)
+    assert client.command("first") == "first reply"
+    assert client.command("second") == ""
+    assert client.command("third") == "third reply"
+
+
+def test_sentinel_mode_empty_echo_does_not_wait_for_extra_packet(client_factory):
+    def handler(conn):
+        for expected_command in ("first", "second", "third"):
+            command_id, command_type, command = _recv_packet(conn)
+            sentinel_id, sentinel_type, sentinel_body = _recv_packet(conn)
+            assert command_type == RconClient.SERVERDATA_EXECCOMMAND
+            assert command == expected_command
+            assert sentinel_type == RconClient.SERVERDATA_RESPONSE_VALUE
+            assert sentinel_body == ""
+            conn.sendall(_packet(command_id, RconClient.SERVERDATA_RESPONSE_VALUE, command))
+            conn.sendall(_packet(sentinel_id, RconClient.SERVERDATA_RESPONSE_VALUE, ""))
+
+    client = client_factory(handler)
+    for command in ("first", "second", "third"):
+        started = time.monotonic()
+        assert client.command(command) == command
+        assert time.monotonic() - started < 0.2
+
+
+def test_sentinel_mode_discards_prior_marker_within_next_reply(client_factory):
+    def handler(conn):
+        first_command_id, _, _ = _recv_packet(conn)
+        first_sentinel_id, _, _ = _recv_packet(conn)
+        conn.sendall(_packet(first_command_id, RconClient.SERVERDATA_RESPONSE_VALUE, "first"))
+        conn.sendall(_packet(first_sentinel_id, RconClient.SERVERDATA_RESPONSE_VALUE, ""))
+
+        second_command_id, _, _ = _recv_packet(conn)
+        second_sentinel_id, _, _ = _recv_packet(conn)
+        conn.sendall(_packet(second_command_id, RconClient.SERVERDATA_RESPONSE_VALUE, "before"))
+        conn.sendall(_packet(first_sentinel_id, RconClient.SERVERDATA_RESPONSE_VALUE, "discard"))
+        conn.sendall(_packet(second_command_id, RconClient.SERVERDATA_RESPONSE_VALUE, "after"))
+        conn.sendall(_packet(second_sentinel_id, RconClient.SERVERDATA_RESPONSE_VALUE, ""))
+
+    client = client_factory(handler)
+    assert client.command("first") == "first"
+    assert client.command("second") == "beforeafter"
+
+
 def test_no_sentinel_sends_no_sentinel_and_reuses_connection(client_factory):
     def handler(conn):
         for expected in ("first", "second"):
