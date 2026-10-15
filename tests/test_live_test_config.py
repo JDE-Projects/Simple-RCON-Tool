@@ -50,3 +50,14 @@ def test_conan_config_seeds_ban_list_with_test_id_only(tmp_path):
     unban = next(check for check in CONAN["checks"] if check["label"] == "Unban")
     assert unban["arg"] == TEST_ID
     assert unban["expect"]["file_not_contains"] == [BAN_FILE, TEST_ID]
+
+
+def test_ark_ban_evidence_reads_the_ban_list_next_to_the_exe(tmp_path):
+    from tools.live_test.games.ark_asa import TEST_ID, banned, unbanned
+    run_dir = tmp_path / "runs" / "ark_asa-1"
+    run_dir.mkdir(parents=True)
+    assert not banned(run_dir, TEST_ID) and unbanned(run_dir, TEST_ID)
+    ban_list = tmp_path / "servers" / "ark_asa" / "ShooterGame" / "Binaries" / "Win64" / "BanList.txt"
+    ban_list.parent.mkdir(parents=True)
+    ban_list.write_text(TEST_ID + "\n", encoding="utf-8")
+    assert banned(run_dir, TEST_ID) and not unbanned(run_dir, TEST_ID)

@@ -336,7 +336,12 @@ GAME_CATALOG = [
     },
     {
         "key": "ark_asa", "name": "ARK: Survival Ascended", "protocol": "source",
-        "note": "Same command set as Survival Evolved.",
+        "sentinel": False,
+        "note": "RCON needs RCONEnabled=True, RCONPort (default 27020) and "
+                "ServerAdminPassword. Commands take no cheat prefix. Get Chat shows "
+                "chat since the last Get Chat. For about 30 seconds after the port "
+                "opens, Connect times out. RCON listens on every network address and "
+                "the server cannot limit it, so keep the port closed to the internet.",
         "buttons": [
             {"label": "List Players", "command": "ListPlayers"},
             {"label": "Save World", "command": "SaveWorld"},
@@ -346,6 +351,9 @@ GAME_CATALOG = [
             {"label": "Destroy Wild Dinos", "command": "DestroyWildDinos",
              "confirm": "Destroy all wild creatures on the map now?"},
             {"label": "Kick Player", "command": "KickPlayer {arg}"},
+            {"label": "Ban Player", "command": "BanPlayer {arg}",
+             "confirm": "Ban this player?"},
+            {"label": "Unban Player", "command": "UnbanPlayer {arg}"},
             {"label": "Shutdown", "command": "DoExit",
              "confirm": "Shut the server down now?"},
         ],
