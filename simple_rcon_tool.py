@@ -352,6 +352,8 @@ GAME_CATALOG = [
     },
     {
         "key": "conan", "name": "Conan Exiles", "protocol": "source",
+        "sentinel": False,
+        "reply_ids_lag": True,
         "note": "kick/ban take a type+id+message format; use the custom box for those.",
         "buttons": [
             {"label": "List Players", "command": "listplayers"},
@@ -550,6 +552,11 @@ def game_uses_sentinel(game_key):
     return g.get("sentinel", True) if g else True
 
 
+def game_reply_ids_lag(game_key):
+    g = CATALOG_BY_KEY.get(game_key)
+    return g.get("reply_ids_lag", False) if g else False
+
+
 # ----------------------------------------------------------------------------
 # Source RCON client (standard library only)
 # ----------------------------------------------------------------------------
@@ -571,14 +578,16 @@ class RconClient:
     SERVERDATA_EXECCOMMAND = 2
     SERVERDATA_RESPONSE_VALUE = 0
 
-    def __init__(self, host, port, password, timeout=8, *, sentinel=True):
+    def __init__(self, host, port, password, timeout=8, *, sentinel=True, reply_ids_lag=False):
         self.host = host
         self.port = int(port)
         self.password = password  # memory only
         self.timeout = timeout
         self.sentinel = sentinel
+        self.reply_ids_lag = reply_ids_lag
         self.sock = None
         self._id = 0
+        self._last_sent_id = None
 
     def connect(self):
         self.sock = socket.create_connection((self.host, self.port), timeout=self.timeout)
@@ -594,6 +603,7 @@ class RconClient:
         payload = struct.pack("<ii", req_id, type_) + body.encode("utf-8") + b"\x00\x00"
         packet = struct.pack("<i", len(payload)) + payload
         self.sock.sendall(packet)
+        self._last_sent_id = req_id
         return req_id
 
     def _recv_exact(self, n):
@@ -653,6 +663,7 @@ class RconClient:
             # ignore the mirrored empty packet some servers send first
 
     def command(self, cmd):
+        previous_id = self._last_sent_id
         command_id = self._send(self.SERVERDATA_EXECCOMMAND, cmd)
         parts = []
         normal_timeout = self.sock.gettimeout()
@@ -670,10 +681,13 @@ class RconClient:
                 except socket.timeout:
                     pass  # some servers do not echo the sentinel; return what we have
             else:
+                accepted_ids = {command_id}
+                if self.reply_ids_lag and previous_id is not None:
+                    accepted_ids.add(previous_id)
                 try:
                     while True:
                         req_id, _, body = self._recv_command_packet()
-                        if req_id == command_id:
+                        if req_id in accepted_ids:
                             parts.append(body)
                             break
                 except socket.timeout:
@@ -690,7 +704,7 @@ class RconClient:
                         )
                     except _RconIdleTimeout:
                         break
-                    if req_id == command_id:
+                    if req_id in accepted_ids:
                         parts.append(body)
                         idle_deadline = time.monotonic() + RCON_REPLY_IDLE_GAP
         finally:
@@ -716,6 +730,7 @@ class Session:
         self.client = RconClient(
             server["host"], server["port"], password,
             sentinel=game_uses_sentinel(server.get("game")),
+            reply_ids_lag=game_reply_ids_lag(server.get("game")),
         )
         self.lock = threading.Lock()  # one command at a time per socket
 
