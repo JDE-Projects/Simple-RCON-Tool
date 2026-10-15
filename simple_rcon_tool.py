@@ -453,7 +453,13 @@ GAME_CATALOG = [
     },
     {
         "key": "squad", "name": "Squad", "protocol": "source",
-        "note": "RCON port is usually separate from the game port (often 21114).",
+        "sentinel": False,
+        "note": "Default RCON port 21114. RCON stays off until Password is set "
+                "in ServerConfig/Rcon.cfg; it listens on every address unless IP "
+                "is set there. For about 10 s after a start, commands get no "
+                "reply. Kick by ID takes the player's ID from List Players, then "
+                "a reason (for example: 12 Breaking rules). A mistyped command "
+                "gets no reply.",
         "buttons": [
             {"label": "List Players", "command": "ListPlayers"},
             {"label": "List Squads", "command": "ListSquads"},
