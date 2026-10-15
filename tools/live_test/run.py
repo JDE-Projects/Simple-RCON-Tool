@@ -175,8 +175,14 @@ def start_server(definition: dict, root: Path, run_dir: Path, password: str, log
     # Own process group so a console Ctrl+Break reaches only the server.
     # Some servers only start from their install folder; "cwd" picks the folder, else the run folder.
     cwd = definition["cwd"](root, run_dir) if definition.get("cwd") else run_dir
-    process = subprocess.Popen(definition["launch"](root, run_dir, password), cwd=cwd, stdout=log,
-                               stderr=subprocess.STDOUT, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+    # Some servers stop with an error unless their input is a real console; "console_input" hands them this one.
+    stdin = open("CONIN$", "rb") if definition.get("console_input") else None
+    try:
+        process = subprocess.Popen(definition["launch"](root, run_dir, password), cwd=cwd, stdin=stdin, stdout=log,
+                                   stderr=subprocess.STDOUT, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+    finally:
+        if stdin:
+            stdin.close()
     job.assign(process)
     return process
 

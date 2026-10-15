@@ -325,3 +325,37 @@ def test_ready_fails_fast_when_server_has_exited():
     definition = {"timeouts": {"start": 600}, "rcon_port": 1, "catalog_key": "fake", "loopback_supported": True}
     with pytest.raises(LiveTestError, match="exited with code 2 before RCON was ready"):
         run.ready(definition, "pw", None, _FakeProcess(returncode=2))
+
+
+@pytest.mark.parametrize("console_input", [False, True])
+def test_console_input_hands_server_the_console(monkeypatch, tmp_path, console_input):
+    opened, seen = [], {}
+
+    class FakeConsole:
+        closed = False
+
+        def close(self):
+            self.closed = True
+
+    def fake_open(path, mode):
+        opened.append((path, mode))
+        return FakeConsole()
+
+    class FakeJob:
+        def assign(self, process):
+            seen["assigned"] = process
+
+    def fake_popen(command, **kwargs):
+        seen.update(kwargs)
+        return "process"
+
+    monkeypatch.setattr(run, "open", fake_open, raising=False)
+    monkeypatch.setattr(run.subprocess, "Popen", fake_popen)
+    definition = {"launch": lambda root, run_dir, password: ["server.exe"], "console_input": console_input}
+    assert run.start_server(definition, tmp_path, tmp_path, "pw", None, FakeJob()) == "process"
+    if console_input:
+        assert opened == [("CONIN$", "rb")]
+        assert isinstance(seen["stdin"], FakeConsole) and seen["stdin"].closed
+    else:
+        assert opened == [] and seen["stdin"] is None
+    assert seen["assigned"] == "process"
