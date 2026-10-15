@@ -5,7 +5,9 @@ import time
 
 import pytest
 
-from simple_rcon_tool import RconClient, RconError, Session, game_uses_sentinel
+from simple_rcon_tool import (
+    RconClient, RconError, Session, game_reply_ids_lag, game_uses_sentinel,
+)
 
 
 def _packet(req_id, type_, body):
@@ -68,9 +70,12 @@ def client_factory():
     clients = []
     servers = []
 
-    def create(handler, *, sentinel=True):
+    def create(handler, *, sentinel=True, reply_ids_lag=False):
         server = FakeRconServer(handler)
-        client = RconClient("127.0.0.1", server.port, "password", timeout=1, sentinel=sentinel)
+        client = RconClient(
+            "127.0.0.1", server.port, "password", timeout=1,
+            sentinel=sentinel, reply_ids_lag=reply_ids_lag,
+        )
         client.connect()
         clients.append(client)
         servers.append(server)
@@ -133,6 +138,62 @@ def test_no_sentinel_joins_packets_within_idle_gap(client_factory):
 
     client = client_factory(handler, sentinel=False)
     assert client.command("status") == "first second"
+
+
+def test_no_sentinel_lagged_reply_ids_work_after_auth_and_next_command(client_factory):
+    def handler(conn):
+        auth_id = 1
+        first_id, _, _ = _recv_packet(conn)
+        conn.sendall(_packet(auth_id, RconClient.SERVERDATA_AUTH_RESPONSE, "first"))
+        _second_id, _, _ = _recv_packet(conn)
+        conn.sendall(_packet(first_id, RconClient.SERVERDATA_AUTH_RESPONSE, "second"))
+
+    client = client_factory(handler, sentinel=False, reply_ids_lag=True)
+    assert client.command("first") == "first"
+    assert client.command("second") == "second"
+
+
+def test_no_sentinel_lagged_client_accepts_command_id(client_factory):
+    def handler(conn):
+        command_id, _, _ = _recv_packet(conn)
+        conn.sendall(_packet(command_id, RconClient.SERVERDATA_AUTH_RESPONSE, "reply"))
+
+    client = client_factory(handler, sentinel=False, reply_ids_lag=True)
+    assert client.command("status") == "reply"
+
+
+def test_no_sentinel_lagged_client_ignores_reply_two_ids_back(client_factory):
+    def handler(conn):
+        first_id, _, _ = _recv_packet(conn)
+        conn.sendall(_packet(first_id, RconClient.SERVERDATA_AUTH_RESPONSE, "first"))
+        second_id, _, _ = _recv_packet(conn)
+        conn.sendall(_packet(1, RconClient.SERVERDATA_AUTH_RESPONSE, "too old"))
+        conn.sendall(_packet(second_id, RconClient.SERVERDATA_AUTH_RESPONSE, "second"))
+
+    client = client_factory(handler, sentinel=False, reply_ids_lag=True)
+    assert client.command("first") == "first"
+    assert client.command("second") == "second"
+
+
+def test_no_sentinel_lagged_client_joins_packets_within_idle_gap(client_factory):
+    def handler(conn):
+        _command_id, _, _ = _recv_packet(conn)
+        conn.sendall(_packet(1, RconClient.SERVERDATA_AUTH_RESPONSE, "first "))
+        time.sleep(0.05)
+        conn.sendall(_packet(1, RconClient.SERVERDATA_AUTH_RESPONSE, "second"))
+
+    client = client_factory(handler, sentinel=False, reply_ids_lag=True)
+    assert client.command("status") == "first second"
+
+
+def test_no_sentinel_unflagged_client_ignores_lagged_reply_id(client_factory):
+    def handler(conn):
+        command_id, _, _ = _recv_packet(conn)
+        conn.sendall(_packet(1, RconClient.SERVERDATA_AUTH_RESPONSE, "lagged"))
+        conn.sendall(_packet(command_id, RconClient.SERVERDATA_AUTH_RESPONSE, "reply"))
+
+    client = client_factory(handler, sentinel=False)
+    assert client.command("status") == "reply"
 
 
 def test_no_sentinel_excludes_late_reply_from_next_command(client_factory):
@@ -205,8 +266,16 @@ def test_game_uses_sentinel_for_flagged_source_and_unknown_games():
     assert game_uses_sentinel("windrose") is False
     assert game_uses_sentinel("factorio") is False
     assert game_uses_sentinel("minecraft") is False
+    assert game_uses_sentinel("conan") is False
     assert game_uses_sentinel("gmod") is True
     assert game_uses_sentinel("unknown") is True
+
+
+def test_game_reply_ids_lag_for_conan_and_other_games():
+    assert game_reply_ids_lag("conan") is True
+    assert game_reply_ids_lag("valheim") is False
+    assert game_reply_ids_lag("minecraft") is False
+    assert game_reply_ids_lag("unknown") is False
 
 
 @pytest.mark.parametrize(
@@ -219,3 +288,8 @@ def test_game_uses_sentinel_for_flagged_source_and_unknown_games():
 def test_session_passes_game_sentinel_flag_to_client(game, expected):
     server = {"host": "127.0.0.1", "port": 27015, "game": game}
     assert Session(server, "password").client.sentinel is expected
+
+
+def test_session_passes_game_reply_ids_lag_flag_to_client():
+    server = {"host": "127.0.0.1", "port": 27015, "game": "conan"}
+    assert Session(server, "password").client.reply_ids_lag is True
