@@ -1,4 +1,7 @@
+import importlib
 import zipfile
+
+import pytest
 
 from tools.live_test.games.conan import BAN_FILE, DEFINITION as CONAN, TEST_ID
 from tools.live_test.games.minecraft import DEFINITION as MINECRAFT
@@ -52,12 +55,29 @@ def test_conan_config_seeds_ban_list_with_test_id_only(tmp_path):
     assert unban["expect"]["file_not_contains"] == [BAN_FILE, TEST_ID]
 
 
-def test_ark_ban_evidence_reads_the_ban_list_next_to_the_exe(tmp_path):
-    from tools.live_test.games.ark_asa import TEST_ID, banned, unbanned
-    run_dir = tmp_path / "runs" / "ark_asa-1"
+@pytest.mark.parametrize("game", ["ark_asa", "ark_se"])
+def test_ark_ban_evidence_reads_the_ban_list_next_to_the_exe(tmp_path, game):
+    module = importlib.import_module(f"tools.live_test.games.{game}")
+    TEST_ID, banned, unbanned = module.TEST_ID, module.banned, module.unbanned
+    run_dir = tmp_path / "runs" / f"{game}-1"
     run_dir.mkdir(parents=True)
     assert not banned(run_dir, TEST_ID) and unbanned(run_dir, TEST_ID)
-    ban_list = tmp_path / "servers" / "ark_asa" / "ShooterGame" / "Binaries" / "Win64" / "BanList.txt"
+    ban_list = tmp_path / "servers" / game / "ShooterGame" / "Binaries" / "Win64" / "BanList.txt"
     ban_list.parent.mkdir(parents=True)
     ban_list.write_text(TEST_ID + "\n", encoding="utf-8")
     assert banned(run_dir, TEST_ID) and not unbanned(run_dir, TEST_ID)
+
+
+def test_ark_se_save_evidence_needs_a_save_after_startup_and_the_run_world(tmp_path):
+    from tools.live_test.games.ark_se import MAP, server_log, world_saved
+    run_dir = tmp_path / "runs" / "ark_se-1"
+    run_dir.mkdir(parents=True)
+    world = tmp_path / "servers" / "ark_se" / "ShooterGame" / "Saved" / "ark_se-1" / f"{MAP}.ark"
+    world.parent.mkdir(parents=True)
+    world.write_bytes(b"ark")
+    server_log(run_dir).write_text("Saving world...\nFull Startup: 1.00 seconds\n", encoding="utf-8")
+    assert not world_saved(run_dir, "")
+    server_log(run_dir).write_text("Full Startup: 1.00 seconds\nSaving world...\n", encoding="utf-8")
+    assert world_saved(run_dir, "")
+    world.unlink()
+    assert not world_saved(run_dir, "")

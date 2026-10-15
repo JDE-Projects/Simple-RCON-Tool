@@ -7,6 +7,7 @@ This tool installs and tests a real dedicated server locally. It is intentionall
 - Use Windows and Python 3.12 or later.
 - `baseline.json` supplies the approved URLs, hashes, and versions.
 - Install SteamCMD at `E:\SRT-TestServers\steamcmd\steamcmd.exe` for Valheim.
+- ARK: Survival Evolved needs two DirectX audio files Windows 11 does not ship, `X3DAudio1_7.dll` and `XAPOFX1_5.dll`; without them the server exits at once with code 0xC0000135. Take them from Microsoft's DirectX End-User Runtimes (June 2010) package, `directx_Jun2010_redist.exe` (check its Microsoft signature): extract it with `/Q /T:<folder>`, then `expand` `Feb2010_X3DAudio_x64.cab` and `Jun2010_XAudio_x64.cab` into `servers\ark_se\ShooterGame\Binaries\Win64`. Nothing is installed into Windows. The package is kept in `E:\SRT-TestServers\downloads\directx_jun2010`.
 - Ensure the game and RCON ports are free. The runner checks TCP and UDP on `0.0.0.0` and `127.0.0.1` before and after a run.
 
 ## Commands
