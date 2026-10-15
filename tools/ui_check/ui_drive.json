@@ -7,6 +7,11 @@
     "smoke": {
       "script": "tools/ui_check/smoke.js",
       "timeout_s": 120
+    },
+    "gmod-console": {
+      "script": "tools/ui_check/gmod_console.js",
+      "fixture": "tools/ui_check/gmod_fixture.py",
+      "timeout_s": 180
     }
   }
 }
