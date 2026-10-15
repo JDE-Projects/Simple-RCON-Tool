@@ -354,9 +354,15 @@ GAME_CATALOG = [
         "key": "conan", "name": "Conan Exiles", "protocol": "source",
         "sentinel": False,
         "reply_ids_lag": True,
-        "note": "kick/ban take a type+id+message format; use the custom box for those.",
+        "note": "Kick takes a player name then a reason. Ban takes a platform ID "
+                "(from List Players) then a reason. Unban takes the ID. Kick and "
+                "Ban work only on players who are online. For about 20 seconds "
+                "after the server starts, commands fail while the map loads.",
         "buttons": [
             {"label": "List Players", "command": "listplayers"},
+            {"label": "Kick", "command": "kickplayer name {arg}"},
+            {"label": "Ban", "command": "banplayer platformid {arg}", "confirm": "Ban this player?"},
+            {"label": "Unban", "command": "unbanplayer {arg}"},
             {"label": "List Bans", "command": "listbans"},
             {"label": "Broadcast", "command": "broadcast {arg}"},
             {"label": "Help", "command": "help"},

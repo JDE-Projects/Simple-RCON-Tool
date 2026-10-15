@@ -1,5 +1,6 @@
 import zipfile
 
+from tools.live_test.games.conan import BAN_FILE, DEFINITION as CONAN, TEST_ID
 from tools.live_test.games.minecraft import DEFINITION as MINECRAFT
 from tools.live_test.games.valheim import (DEFINITION as VALHEIM, VALHEIM_RCON_CONFIG,
                                            install_bepinex, install_rcon)
@@ -41,3 +42,11 @@ def test_valheim_mod_install_layout(tmp_path):
     assert (server / "winhttp.dll").read_bytes() == b"winhttp"
     assert (server / "BepInEx" / "plugins" / "ValheimRcon" / "ValheimRcon.dll").read_bytes() == b"rcon"
     assert not (server / "README.md").exists()
+
+
+def test_conan_config_seeds_ban_list_with_test_id_only(tmp_path):
+    CONAN["configure"](tmp_path, tmp_path, CONAN, "secret")
+    assert (tmp_path / BAN_FILE).read_text(encoding="utf-8") == TEST_ID + "\n"
+    unban = next(check for check in CONAN["checks"] if check["label"] == "Unban")
+    assert unban["arg"] == TEST_ID
+    assert unban["expect"]["file_not_contains"] == [BAN_FILE, TEST_ID]
