@@ -415,13 +415,16 @@ GAME_CATALOG = [
     },
     {
         "key": "pz", "name": "Project Zomboid", "protocol": "source",
-        "note": "No leading slash over RCON. Quotes around multi-word names.",
+        "note": ("No leading slash over RCON. Put quotes around multi-word names. RCON stays off "
+                 "until RCONPassword is set in the server's .ini (port 27015 by default). "
+                 "Kick needs the player online."),
         "buttons": [
             {"label": "Players", "command": "players"},
             {"label": "Save", "command": "save"},
-            {"label": "Server Message", "command": "servermsg {arg}"},
+            {"label": "Server Message", "command": 'servermsg "{arg}"'},
             {"label": "Kick User", "command": "kickuser {arg}"},
             {"label": "Ban User", "command": "banuser {arg}", "confirm": "Ban this user?"},
+            {"label": "Unban User", "command": "unbanuser {arg}"},
             {"label": "Show Options", "command": "showoptions"},
             {"label": "Save & Quit", "command": "quit", "confirm": "Save and stop the server?"},
         ],
