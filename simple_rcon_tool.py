@@ -320,7 +320,13 @@ def _version_gt(a, b):
 GAME_CATALOG = [
     {
         "key": "ark_se", "name": "ARK: Survival Evolved", "protocol": "source",
-        "note": "Commands run as admin over RCON; no admincheat prefix needed.",
+        "sentinel": False,
+        "note": "RCON needs RCONEnabled=True, RCONPort (default 27020) and "
+                "ServerAdminPassword. Commands take no cheat prefix. Get Chat shows "
+                "chat since the last Get Chat. The server can take several minutes to "
+                "start. RCON listens on the MultiHome address when one is set, "
+                "otherwise on every address. The server writes the admin password "
+                "into its log.",
         "buttons": [
             {"label": "List Players", "command": "ListPlayers"},
             {"label": "Save World", "command": "SaveWorld"},
@@ -330,6 +336,9 @@ GAME_CATALOG = [
             {"label": "Destroy Wild Dinos", "command": "DestroyWildDinos",
              "confirm": "Destroy all wild creatures on the map now?"},
             {"label": "Kick Player", "command": "KickPlayer {arg}"},
+            {"label": "Ban Player", "command": "BanPlayer {arg}",
+             "confirm": "Ban this player?"},
+            {"label": "Unban Player", "command": "UnbanPlayer {arg}"},
             {"label": "Shutdown", "command": "DoExit",
              "confirm": "Shut the server down now?"},
         ],
