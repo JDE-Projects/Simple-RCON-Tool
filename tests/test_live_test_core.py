@@ -138,6 +138,40 @@ def test_stop_check_passes_on_disconnect_and_process_exit(monkeypatch, tmp_path)
     assert records[0]["status"] == "pass"
 
 
+def test_evidence_function_gets_run_folder_and_argument_and_is_recorded_by_name(monkeypatch, tmp_path):
+    seen = []
+
+    def banned(run_dir, arg):
+        seen.append((run_dir, arg))
+        return arg == "Name"
+
+    checks = [{"label": "Ban", "arg": "Name", "expect": {"reply": "^ok$", "evidence": banned}},
+              {"label": "Ban Other", "arg": "Other", "expect": {"reply": "^ok$", "evidence": banned}}]
+    records, _, _ = _checks(monkeypatch, tmp_path, checks)
+    assert seen == [(tmp_path, "Name"), (tmp_path, "Other")]
+    assert [row["status"] for row in records] == ["pass", "fail"]
+    write_results(tmp_path, {"game": "fake", "status": "pass", "checks": records}, [])
+    assert json.loads((tmp_path / "results.json").read_text(encoding="utf-8"))["checks"][0]["expected"]["evidence"] == "banned"
+
+
+def test_evidence_wait_keeps_looking_for_late_evidence(monkeypatch, tmp_path):
+    monkeypatch.setattr(run.time, "sleep", lambda seconds: None)
+    calls = []
+
+    def saved(run_dir, arg):
+        calls.append(arg)
+        return len(calls) >= 3
+
+    records, _, _ = _checks(monkeypatch, tmp_path, [{"label": "Save", "evidence_wait": 5,
+                                                       "expect": {"reply": "^ok$", "evidence": saved}}])
+    assert records[0]["status"] == "pass"
+    assert len(calls) == 3
+    calls.clear()
+    records, _, _ = _checks(monkeypatch, tmp_path, [{"label": "Save", "expect": {"reply": "^ok$", "evidence": saved}}])
+    assert records[0]["status"] == "fail"
+    assert len(calls) == 1
+
+
 def test_checksum_refuses_empty_and_mismatch(tmp_path):
     file = tmp_path / "download.bin"
     file.write_bytes(b"safe")

@@ -79,6 +79,9 @@ def isolation(definition: dict, root: Path) -> dict:
 
 
 def evidence_for(expectation: dict, run_dir: Path, log_path: Path, sent_at: float, arg: str) -> bool:
+    # A definition's own function, for evidence the keys below cannot read (a database, a dated log file).
+    if "evidence" in expectation:
+        return bool(expectation["evidence"](run_dir, arg))
     if "file_contains" in expectation or "file_not_contains" in expectation:
         relative, text = expectation.get("file_contains", expectation.get("file_not_contains"))
         content = (run_dir / relative).read_text(encoding="utf-8", errors="replace") if (run_dir / relative).exists() else ""
@@ -127,6 +130,12 @@ def run_checks(definition: dict, catalog: dict, password: str, run_dir: Path, lo
                 error = TimeoutError(f"check exceeded {definition['timeouts']['check']} seconds")
             expected = check.get("expect", {})
             effect = evidence_for(expected, run_dir, log_path, started, arg)
+            # Some servers act after replying (a queued save, a shutdown); "evidence_wait" keeps looking that many seconds.
+            if not effect and check.get("evidence_wait"):
+                deadline = time.monotonic() + check["evidence_wait"]
+                while not effect and time.monotonic() < deadline:
+                    time.sleep(0.5)
+                    effect = evidence_for(expected, run_dir, log_path, started, arg)
             if check.get("stop"):
                 try:
                     process.wait(timeout=definition["timeouts"]["stop"])
@@ -135,7 +144,9 @@ def run_checks(definition: dict, catalog: dict, password: str, run_dir: Path, lo
                     effect = False
             status, note = classify_check({**expected, "player_required": check.get("player_required", False),
                                            "unverified_if_no_evidence": check.get("unverified_if_no_evidence", expected.get("unverified_if_no_evidence", False))}, reply, error, effect)
-            records.append({"label": check["label"], "status": status, "expected": expected, "actual": reply,
+            # Results are JSON, so an evidence function is recorded by name.
+            shown = {key: value.__name__ if callable(value) else value for key, value in expected.items()}
+            records.append({"label": check["label"], "status": status, "expected": shown, "actual": reply,
                             "evidence": note, "timing_seconds": round(time.time() - started, 3),
                             "exception": str(error) if error else None})
             if check.get("cleanup"):
