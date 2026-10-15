@@ -223,7 +223,7 @@ def wait_for_log(log_path: Path, text: str, process: subprocess.Popen, timeout: 
     while time.monotonic() < deadline:
         if process.poll() is not None:
             raise LiveTestError(f"server exited with code {process.returncode} during {stage}")
-        if text in log_path.read_text(encoding="utf-8", errors="replace"):
+        if log_path.exists() and text in log_path.read_text(encoding="utf-8", errors="replace"):
             return
         time.sleep(2)
     raise LiveTestError(f"{stage} did not log {text!r} within {timeout} seconds")
@@ -259,12 +259,14 @@ def run_game(definition: dict, root: Path, skip_update: bool) -> int:
         with log_path.open("wb") as log:
             process = start_server(definition, root, run_dir, password, log, job)
             ready(definition, password, job, process)
+            # Some servers write their log only to a file of their own; "server_log" names it for the waits and checks below.
+            watched_log = definition["server_log"](run_dir) if definition.get("server_log") else log_path
             # Some servers open RCON before they can run commands; "ready_log" waits for the line that says they can.
             if definition.get("ready_log"):
-                wait_for_log(log_path, definition["ready_log"], process, definition["timeouts"]["start"], "startup")
+                wait_for_log(watched_log, definition["ready_log"], process, definition["timeouts"]["start"], "startup")
             isolation_evidence["rcon_listener_owned_by_job"] = True
             isolation_evidence["bind_address"] = "127.0.0.1" if definition["loopback_supported"] else definition["loopback_reason"]
-            records = run_checks(definition, catalog, password, run_dir, log_path, process, redactions)
+            records = run_checks(definition, catalog, password, run_dir, watched_log, process, redactions)
     except Exception as exc:
         lifecycle_error = str(exc)
     finally:

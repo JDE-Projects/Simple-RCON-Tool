@@ -289,6 +289,42 @@ def test_ready_log_waits_after_ready_and_before_checks(monkeypatch, tmp_path, re
         assert calls == ["ready", "checks"]
 
 
+def test_server_log_is_watched_for_ready_log_and_handed_to_checks(monkeypatch, tmp_path):
+    definition = {"key": "fake", "name": "Fake", "catalog_key": "fake", "ports": [1], "rcon_port": 1,
+                  "loopback_supported": True, "loopback_reason": "", "checks": [], "timeouts": {"start": 7, "stop": 1},
+                  "launch": lambda root, run_dir, password: [],
+                  "configure": lambda root, run_dir, definition, password: None, "server_version": lambda root: "1",
+                  "ready_log": "Full Startup:", "server_log": lambda run_dir: run_dir / "own.log"}
+    calls = []
+    class Job:
+        handle = True
+        def assign(self, process): pass
+        def pids(self): return set()
+        def terminate(self): pass
+        def close(self): self.handle = None
+    class Process:
+        def poll(self): return 0
+        def wait(self, timeout): return 0
+    monkeypatch.setattr(run, "catalog_for", lambda definition: {"buttons": []})
+    monkeypatch.setattr(run, "isolation", lambda definition, root: {"ports_free_before": True})
+    monkeypatch.setattr(run, "WindowsJob", Job)
+    monkeypatch.setattr(run.subprocess, "Popen", lambda *args, **kwargs: Process())
+    monkeypatch.setattr(run, "ready", lambda *args: None)
+    monkeypatch.setattr(run, "wait_for_log", lambda log_path, text, process, timeout, stage:
+                        calls.append(("wait_for_log", log_path.name)))
+    monkeypatch.setattr(run, "run_checks", lambda definition, catalog, password, run_dir, log_path, *rest:
+                        calls.append(("checks", log_path.name)) or [])
+    monkeypatch.setattr(run, "ports_free", lambda ports: (True, ""))
+    monkeypatch.setattr(run, "runner_git_commit", lambda: "unknown")
+    assert run.run_game(definition, tmp_path, True) == 0
+    assert calls == [("wait_for_log", "own.log"), ("checks", "own.log")]
+
+
+def test_wait_for_log_waits_for_a_log_file_not_yet_created(tmp_path):
+    with pytest.raises(LiveTestError, match="^startup did not log 'Ready' within 1 seconds$"):
+        run.wait_for_log(tmp_path / "missing.log", "Ready", _FakeProcess(), 1, "startup")
+
+
 def test_ready_log_timeout_fails_run_without_checks(monkeypatch, tmp_path):
     definition = {"key": "fake", "name": "Fake", "catalog_key": "fake", "ports": [1], "rcon_port": 1,
                   "loopback_supported": True, "loopback_reason": "", "checks": [], "timeouts": {"start": 7, "stop": 1},
