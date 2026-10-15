@@ -457,7 +457,9 @@ GAME_CATALOG = [
     },
     {
         "key": "gmod", "name": "Garry's Mod", "protocol": "source",
-        "note": "Source engine console commands.",
+        "note": "Default port 27015, the same as the game port. Set the RCON "
+                "password with rcon_password. Kick takes a player's name as "
+                "Status shows it.",
         "buttons": [
             {"label": "Status", "command": "status"},
             {"label": "Say", "command": "say {arg}"},
