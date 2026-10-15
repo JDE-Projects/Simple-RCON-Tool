@@ -135,7 +135,8 @@ def classify_check(expectation: dict, reply: str | None, exception: Exception | 
     pattern = expectation.get("reply")
     if pattern and not re.search(pattern, reply, re.IGNORECASE):
         return "fail", "reply did not match expectation"
-    if any(key in expectation for key in ("file_contains", "file_not_contains", "modified", "modified_glob", "log_contains", "log_contains_arg")) and not evidence:
+    if any(key in expectation for key in ("evidence", "file_contains", "file_not_contains", "modified", "modified_glob",
+                                          "log_contains", "log_contains_arg")) and not evidence:
         return "unverified" if expectation.get("unverified_if_no_evidence") else "fail", "evidence probe did not confirm effect"
     return "pass", "reply and evidence matched"
 
