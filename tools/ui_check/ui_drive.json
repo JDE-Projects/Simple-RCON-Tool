@@ -12,6 +12,11 @@
       "script": "tools/ui_check/gmod_console.js",
       "fixture": "tools/ui_check/gmod_fixture.py",
       "timeout_s": 180
+    },
+    "pz-console": {
+      "script": "tools/ui_check/pz_console.js",
+      "fixture": "tools/ui_check/pz_fixture.py",
+      "timeout_s": 480
     }
   }
 }
