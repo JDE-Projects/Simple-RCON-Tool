@@ -222,6 +222,38 @@ def test_post_cleanup_port_recheck_fails_run(monkeypatch, tmp_path):
     assert result["isolation"]["ports_free_after_cleanup"] is False
 
 
+@pytest.mark.parametrize("busy_polls, status", [(2, 0), (None, 1)])
+def test_cleanup_waits_for_helpers_that_outlive_the_server(monkeypatch, tmp_path, busy_polls, status):
+    definition = {"key": "fake", "name": "Fake", "catalog_key": "fake", "ports": [1], "rcon_port": 1,
+                  "loopback_supported": True, "loopback_reason": "", "checks": [], "timeouts": {"stop": 1},
+                  "launch": lambda root, run_dir, password: [],
+                  "configure": lambda root, run_dir, definition, password: None, "server_version": lambda root: "1"}
+    polls = []
+    class Job:
+        handle = True
+        def assign(self, process): pass
+        # A helper process stays for a few polls after the server exits, or never leaves.
+        def pids(self):
+            polls.append(1)
+            return {7} if busy_polls is None or len(polls) <= busy_polls else set()
+        def terminate(self): pass
+        def close(self): self.handle = None
+    class Process:
+        def poll(self): return 0
+        def wait(self, timeout): return 0
+    monkeypatch.setattr(run, "catalog_for", lambda definition: {"buttons": []})
+    monkeypatch.setattr(run, "isolation", lambda definition, root: {"ports_free_before": True})
+    monkeypatch.setattr(run, "WindowsJob", Job)
+    monkeypatch.setattr(run.subprocess, "Popen", lambda *args, **kwargs: Process())
+    monkeypatch.setattr(run, "ready", lambda *args: None)
+    monkeypatch.setattr(run, "run_checks", lambda *args: [])
+    monkeypatch.setattr(run, "ports_free", lambda ports: (True, ""))
+    monkeypatch.setattr(run, "runner_git_commit", lambda: "unknown")
+    assert run.run_game(definition, tmp_path, True) == status
+    result = json.loads(next((tmp_path / "runs").glob("*/results.json")).read_text(encoding="utf-8"))
+    assert result["lifecycle_error"] == (None if status == 0 else "Job Object still contains processes after cleanup")
+
+
 @pytest.mark.parametrize("ready_log", [None, "Startup report"])
 def test_ready_log_waits_after_ready_and_before_checks(monkeypatch, tmp_path, ready_log):
     definition = {"key": "fake", "name": "Fake", "catalog_key": "fake", "ports": [1], "rcon_port": 1,
