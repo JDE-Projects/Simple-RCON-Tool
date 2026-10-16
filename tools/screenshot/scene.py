@@ -26,11 +26,11 @@ SERVERS = [
         "buttons": [],
     },
     {
-        "id": "srv-rust",
-        "name": "Rustbelt PVE",
+        "id": "srv-squad",
+        "name": "Squad PVE",
         "host": "10.20.4.31",
-        "port": 28016,
-        "game": "rust",
+        "port": 21114,
+        "game": "squad",
         "buttons": [],
     },
 ]

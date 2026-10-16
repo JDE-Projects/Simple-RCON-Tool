@@ -303,7 +303,7 @@ def _version_gt(a, b):
 # Each game carries:
 #   key       stable identifier stored in servers.json
 #   name      display name shown in the picker
-#   protocol  "source" connects today; anything else is gated at connect time
+#   protocol  "source" for the Source RCON client
 #   note      shown in the editor (mod requirements, quirks, status)
 #   buttons   locked command buttons rendered for every server of this game
 #
@@ -314,8 +314,7 @@ def _version_gt(a, b):
 #   argmode   optional "underscore" to swap spaces for underscores in the arg
 #
 # Commands were verified per game. Only games with genuinely useful command
-# sets are included. Non-source games appear but are gated until their client
-# is added in a later update.
+# sets are included.
 
 GAME_CATALOG = [
     {
@@ -449,20 +448,6 @@ GAME_CATALOG = [
         ],
     },
     {
-        "key": "factorio", "name": "Factorio", "protocol": "source",
-        "sentinel": False,
-        "note": "Commands use a leading slash. /c runs Lua and disables achievements.",
-        "buttons": [
-            {"label": "Players", "command": "/players"},
-            {"label": "Admins", "command": "/admins"},
-            {"label": "Save", "command": "/server-save"},
-            {"label": "Bans", "command": "/bans"},
-            {"label": "Kick", "command": "/kick {arg}"},
-            {"label": "Ban", "command": "/ban {arg}", "confirm": "Ban this player?"},
-            {"label": "Quit", "command": "/quit", "confirm": "Stop the server?"},
-        ],
-    },
-    {
         "key": "squad", "name": "Squad", "protocol": "source",
         "sentinel": False,
         "note": "Default RCON port 21114. RCON stays off until Password is set "
@@ -514,19 +499,6 @@ GAME_CATALOG = [
         ],
     },
     {
-        "key": "windrose", "name": "Windrose", "protocol": "source",
-        "sentinel": False,
-        "note": "Requires the community WindroseRCON mod on the server.",
-        "buttons": [
-            {"label": "Info", "command": "info"},
-            {"label": "Show Players", "command": "showplayers"},
-            {"label": "Kick", "command": "kick {arg}"},
-            {"label": "Ban", "command": "ban {arg}", "confirm": "Ban this player?"},
-            {"label": "Unban", "command": "unban {arg}"},
-            {"label": "Ban List", "command": "banlist"},
-        ],
-    },
-    {
         "key": "valheim", "name": "Valheim", "protocol": "source",
         "sentinel": False,
         "note": "Requires the ValheimRcon mod. Crossplay must be off "
@@ -539,48 +511,9 @@ GAME_CATALOG = [
             {"label": "List Bans", "command": "banlist"},
         ],
     },
-
-    # --- staged: present in the picker, gated at connect until a client lands -
-    {
-        "key": "rust", "name": "Rust", "protocol": "websocket",
-        "note": "Rust uses WebSocket RCON. A client is coming in a later update.",
-        "buttons": [],
-    },
-    {
-        "key": "7dtd", "name": "7 Days to Die", "protocol": "telnet",
-        "note": "7 Days to Die uses Telnet. A client is coming in a later update.",
-        "buttons": [],
-    },
-    {
-        "key": "soulmask", "name": "Soulmask", "protocol": "telnet",
-        "note": "Soulmask uses a Telnet console. A client is coming in a later update.",
-        "buttons": [],
-    },
-    {
-        "key": "dayz", "name": "DayZ", "protocol": "battleye",
-        "note": "DayZ uses BattlEye RCON. A client is coming in a later update.",
-        "buttons": [],
-    },
-    {
-        "key": "satisfactory", "name": "Satisfactory", "protocol": "https",
-        "note": "Satisfactory uses an HTTPS API. A client is coming in a later update.",
-        "buttons": [],
-    },
 ]
 
 CATALOG_BY_KEY = {g["key"]: g for g in GAME_CATALOG}
-
-PROTOCOL_LABEL = {
-    "websocket": "WebSocket RCON",
-    "telnet": "Telnet",
-    "battleye": "BattlEye RCON",
-    "https": "HTTPS API",
-}
-
-
-def game_protocol(game_key):
-    g = CATALOG_BY_KEY.get(game_key)
-    return g["protocol"] if g else "source"
 
 
 def game_uses_sentinel(game_key):
@@ -1028,12 +961,10 @@ class Api:
         if not server:
             return {"ok": False, "error": "Server not found."}
 
-        proto = game_protocol(server.get("game"))
-        if proto != "source":
-            label = PROTOCOL_LABEL.get(proto, proto)
+        if server.get("game") not in CATALOG_BY_KEY:
             return {"ok": False, "error":
-                    f"This game uses {label}, which this build does not speak yet. "
-                    f"A client for it is coming in a later update."}
+                    "This server's game is no longer supported. Edit the server to pick another "
+                    "game, or delete it."}
 
         if not password:
             return {"ok": False, "error": "RCON password is required."}

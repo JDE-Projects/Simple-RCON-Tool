@@ -325,8 +325,6 @@ def test_command_restores_socket_timeout(client_factory):
 
 def test_game_uses_sentinel_for_flagged_source_and_unknown_games():
     assert game_uses_sentinel("valheim") is False
-    assert game_uses_sentinel("windrose") is False
-    assert game_uses_sentinel("factorio") is False
     assert game_uses_sentinel("minecraft") is False
     assert game_uses_sentinel("conan") is False
     assert game_uses_sentinel("gmod") is True
@@ -343,8 +341,7 @@ def test_game_reply_ids_lag_for_conan_and_other_games():
 @pytest.mark.parametrize(
     ("game", "expected"),
     [
-        ("valheim", False), ("windrose", False), ("factorio", False),
-        ("minecraft", False), ("gmod", True),
+        ("valheim", False), ("minecraft", False), ("gmod", True),
     ],
 )
 def test_session_passes_game_sentinel_flag_to_client(game, expected):
