@@ -90,37 +90,25 @@ Keep `simple_rcon_tool.py`, `simple_rcon_tool-UI.html`, the `fonts/` folder, `si
 
 ## Supported games
 
-These connect today over Source RCON:
+Tested against a real dedicated server of the version listed.
 
-- ARK: Survival Evolved
-- ARK: Survival Ascended
-- Conan Exiles
-- Palworld
-- Minecraft (Java)
-- Counter-Strike 2
-- Project Zomboid
-- Factorio
-- Squad
-- Garry's Mod
-- Eco (test entry, loosely Source-compatible)
-- Windrose (requires the community WindroseRCON mod)
-- Valheim (requires the ValheimRcon mod, crossplay off)
+- ARK: Survival Ascended 94.29
+- ARK: Survival Evolved 361.7
+- Conan Exiles (server build 25792439)
+- Counter-Strike 2 1.41.9.1
+- Eco (server build 25802357)
+- Garry's Mod (server build 25375525)
+- Minecraft (Java) 26.3
+- Palworld 1.0.5.102999
+- Project Zomboid 42.21.0
+- Squad (server build 25763436)
+- Valheim (server build 25730807) with the ValheimRcon 1.6.2 mod
 
 A few quirks worth knowing:
 
 - **Palworld** commands are case-sensitive, and Broadcast cannot contain spaces (the app auto-converts spaces to underscores).
 - **Eco** kick and ban take a `Name,Reason` value.
-- **Valheim** and **Windrose** need their RCON mod loaded on the server; the editor shows that note when you pick them.
-
-## Roadmap
-
-The catalog also lists games that use other protocols. They appear in the picker but are gated at connect until their client is added:
-
-- **Rust** (WebSocket RCON)
-- **7 Days to Die** (Telnet)
-- **Soulmask** (Telnet)
-- **DayZ** (BattlEye RCON)
-- **Satisfactory** (HTTPS API)
+- **Valheim** needs the ValheimRcon mod loaded on the server, with crossplay off; the editor shows that note when you pick it.
 
 ## Security and privacy
 
