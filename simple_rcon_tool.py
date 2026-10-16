@@ -421,13 +421,15 @@ GAME_CATALOG = [
     },
     {
         "key": "cs2", "name": "Counter-Strike 2", "protocol": "source",
-        "note": "Source engine console commands.",
+        "sentinel": False,
+        "note": "RCON stays off unless the server starts with -usercon. Set the "
+                "password with rcon_password. Default port 27015, the same as the "
+                "game port. Kick takes a player's name as Status shows it.",
         "buttons": [
             {"label": "Status", "command": "status"},
             {"label": "Say", "command": "say {arg}"},
             {"label": "Kick", "command": "kick {arg}"},
             {"label": "Change Level", "command": "changelevel {arg}"},
-            {"label": "List Bans", "command": "listid"},
         ],
     },
     {
