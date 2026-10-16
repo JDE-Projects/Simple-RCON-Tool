@@ -32,6 +32,11 @@
       "script": "tools/ui_check/ark_se_console.js",
       "fixture": "tools/ui_check/ark_se_fixture.py",
       "timeout_s": 600
+    },
+    "cs2-console": {
+      "script": "tools/ui_check/cs2_console.js",
+      "fixture": "tools/ui_check/cs2_fixture.py",
+      "timeout_s": 300
     }
   }
 }
