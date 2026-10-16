@@ -185,7 +185,6 @@
     background: var(--border-2); transition: background 0.2s;
   }
   .card.connected::before { background: linear-gradient(var(--accent), var(--accent-2)); }
-  .card.staged::before { background: var(--amber); }
 
   .card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
   .card-name { font-size: 15.5px; font-weight: 600; display: flex; align-items: center; gap: 9px; }
@@ -203,7 +202,6 @@
     border: 1px solid var(--border-2); color: var(--text-dim);
     letter-spacing: 0.4px; white-space: nowrap;
   }
-  .badge.soon { color: var(--amber); border-color: rgba(240,184,96,0.4); }
 
   .card-icons { display: flex; gap: 4px; }
   .icon-btn {
@@ -223,11 +221,6 @@
   }
   .pw-row input:focus { outline: none; border-color: var(--accent); }
 
-  .coming-soon {
-    margin-top: 13px; font-size: 12px; color: var(--amber);
-    background: rgba(240,184,96,0.07); border: 1px solid rgba(240,184,96,0.25);
-    border-radius: var(--radius-sm); padding: 9px 12px; line-height: 1.45;
-  }
 
   .actions-wrap { display: none; margin-top: 13px; flex-direction: column; gap: 11px; }
   .card.connected .actions-wrap { display: flex; }
@@ -315,7 +308,6 @@
   .field input:focus, .field select:focus { outline: none; border-color: var(--accent); }
   .row2 { display: grid; grid-template-columns: 1fr 140px; gap: 12px; }
   .game-note { font-size: 12px; color: var(--text-faint); margin-top: 7px; line-height: 1.45; }
-  .game-note.soon { color: var(--amber); }
 
   /* built-in (locked) button preview */
   .lock-label { display: flex; align-items: center; gap: 6px; }
@@ -573,13 +565,6 @@
   let promptCb = null;
   const MAX_LINES = 1500;
 
-  const PROTO_LABEL = {
-    websocket: 'WebSocket RCON',
-    telnet: 'Telnet',
-    battleye: 'BattlEye RCON',
-    https: 'HTTPS API',
-  };
-
   const $ = (id) => document.getElementById(id);
   const consoleEl = $('console');
 
@@ -599,7 +584,6 @@
   }
 
   function gameOf(srv) { return CAT_BY_KEY[srv.game] || null; }
-  function protoOf(srv) { const g = gameOf(srv); return g ? g.protocol : 'source'; }
   // built-in (locked) buttons + the server's own custom buttons, in that order
   function combinedButtons(srv) {
     const g = gameOf(srv);
@@ -658,12 +642,11 @@
     }
     SERVERS.forEach(srv => {
       const g = gameOf(srv);
-      const proto = protoOf(srv);
-      const staged = proto !== 'source';
-      const gameName = g ? g.name : 'Unknown game';
+      const unsupported = !g;
+      const gameName = g ? g.name : 'Game no longer supported';
 
       const card = document.createElement('div');
-      card.className = 'card' + (staged ? ' staged' : '');
+      card.className = 'card';
       card.dataset.card = srv.id;
 
       const all = combinedButtons(srv);
@@ -675,12 +658,8 @@
       }).join('');
       const quickHtml = quick || '<div class="quick-empty">No buttons for this game yet. Use the edit icon to add custom ones.</div>';
 
-      const badge = staged
-        ? `<span class="badge soon">soon · ${esc(PROTO_LABEL[proto] || proto)}</span>`
-        : '';
-
-      const connectBlock = staged
-        ? `<div class="coming-soon">${esc(gameName)} uses ${esc(PROTO_LABEL[proto] || proto)}. This build connects Source RCON games only; a client for this protocol is coming in a later update.</div>`
+      const connectBlock = unsupported
+        ? `<div class="game-note">This server's game is no longer supported. Edit the server to pick another game, or delete it.</div>`
         : `<div class="pw-row">
              <input type="password" placeholder="RCON password (not saved)" data-pw />
              <button class="btn primary" data-connect>Connect</button>
@@ -689,7 +668,7 @@
       card.innerHTML = `
         <div class="card-top">
           <div>
-            <div class="card-name"><span class="dot"></span>${esc(srv.name)} ${badge}</div>
+            <div class="card-name"><span class="dot"></span>${esc(srv.name)}</div>
             <div class="card-meta">${esc(gameName)} &middot; ${esc(srv.host)}:${esc(srv.port)}</div>
           </div>
           <div class="card-icons">
@@ -803,10 +782,9 @@
     const sel = $('fGame');
     sel.innerHTML = '<option value="">Select a game…</option>';
     CATALOG.forEach(g => {
-      const staged = g.protocol !== 'source';
       const opt = document.createElement('option');
       opt.value = g.key;
-      opt.textContent = staged ? `${g.name}  (soon · ${PROTO_LABEL[g.protocol] || g.protocol})` : g.name;
+      opt.textContent = g.name;
       sel.appendChild(opt);
     });
   }
@@ -822,9 +800,8 @@
       prev.innerHTML = '<div class="locked-empty">Pick a game to see its built-in buttons.</div>';
       return;
     }
-    const staged = g.protocol !== 'source';
     note.textContent = g.note || '';
-    note.className = 'game-note' + (staged ? ' soon' : '');
+    note.className = 'game-note';
     const chips = (g.buttons || []).map(b => `<span class="locked-chip">${esc(b.label)}</span>`).join('');
     prev.innerHTML = chips || '<div class="locked-empty">No built-in buttons for this game.</div>';
   }
