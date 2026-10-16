@@ -1053,43 +1053,6 @@ class Api:
 
 
 # ----------------------------------------------------------------------------
-# Splash (PyInstaller only)
-# ----------------------------------------------------------------------------
-# The splash exists only inside the frozen .exe. Quick-loading apps keep it up
-# for a minimum floor so it does not just flash; slow apps keep it up until the
-# window reports ready; a watchdog closes it by the ceiling no matter what.
-
-SPLASH_MIN_SECONDS = 5.0    # quick apps: stay visible at least this long
-SPLASH_MAX_SECONDS = 30.0   # watchdog ceiling: always close by here
-
-_app_start = time.monotonic()
-_splash_closed = threading.Event()
-
-
-def _close_splash():
-    if _splash_closed.is_set():
-        return
-    _splash_closed.set()
-    try:
-        import pyi_splash  # only present inside the frozen exe
-        pyi_splash.close()
-    except Exception:
-        pass
-
-
-def _close_splash_when_ready():
-    remaining = SPLASH_MIN_SECONDS - (time.monotonic() - _app_start)
-    if remaining > 0:
-        time.sleep(remaining)
-    _close_splash()
-
-
-def _splash_watchdog():
-    time.sleep(SPLASH_MAX_SECONDS)
-    _close_splash()
-
-
-# ----------------------------------------------------------------------------
 # Boot
 # ----------------------------------------------------------------------------
 
@@ -1148,9 +1111,6 @@ def main():
         except Exception:
             pass
 
-    # Watchdog guarantees the splash always clears, even if 'loaded' never fires
-    threading.Thread(target=_splash_watchdog, daemon=True).start()
-
     api = Api()
     html_path = resource_path("simple_rcon_tool-UI.html")
     window = webview.create_window(
@@ -1174,14 +1134,11 @@ def main():
 
     def on_loaded():
         api.frontend_ready = True
-        # honor the minimum floor, then close the splash
-        threading.Thread(target=_close_splash_when_ready, daemon=True).start()
 
     try:
         window.events.loaded += on_loaded
     except Exception:
         api.frontend_ready = True
-        threading.Thread(target=_close_splash_when_ready, daemon=True).start()
 
     # Qt backend (PySide6 + WebEngine). Pass the PNG so the live taskbar icon
     # is ours; guarded so an older pywebview without the icon arg still launches.

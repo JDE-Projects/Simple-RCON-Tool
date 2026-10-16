@@ -76,7 +76,7 @@ If you would rather run or build it yourself, you need:
 - **Python 3** on the machine's PATH.
 - `pip install -r requirements.txt` (pinned versions; includes `pywebview`, `PySide6`, `qtpy`, `pyinstaller`, and `truststore`). Keep `PyQt6` uninstalled so PySide6 is the bundled binding.
 
-Keep `simple_rcon_tool.py`, `simple_rcon_tool-UI.html`, the `fonts/` folder, `simple_rcon_tool.ico`, `simple_rcon_tool.png` and `simple_rcon_tool-splash.png` together. Then either:
+Keep `simple_rcon_tool.py`, `simple_rcon_tool-UI.html`, the `fonts/` folder, `simple_rcon_tool.ico` and `simple_rcon_tool.png` together. Then either:
 
 - **Run from source:** `python simple_rcon_tool.py`
 - **Build the .exe:** double-click `Build_Simple_RCON_Tool.bat`, which uses PyInstaller to produce `dist\Simple RCON Tool\Simple RCON Tool.exe`. Distribute the whole `Simple RCON Tool` folder.
