@@ -6,7 +6,7 @@ rem  Double-click to build a windowed "Simple RCON Tool" with PyInstaller.
 rem  Closed / noncommercial build, so this uses --onedir (the Qt and other
 rem  bundled libraries stay replaceable). Keep this .bat in the SAME folder as
 rem  simple_rcon_tool.py, simple_rcon_tool-UI.html, the fonts folder,
-rem  simple_rcon_tool.ico, simple_rcon_tool.png and simple_rcon_tool-splash.png.
+rem  simple_rcon_tool.ico and simple_rcon_tool.png.
 rem  The finished app lands in dist\Simple RCON Tool\.
 rem ===========================================================================
 cd /d "%~dp0"
@@ -39,7 +39,6 @@ if not exist "simple_rcon_tool.py" (
 )
 if not exist "simple_rcon_tool.ico" echo WARNING: simple_rcon_tool.ico not found, the exe will use the default icon.
 if not exist "simple_rcon_tool.png" echo WARNING: simple_rcon_tool.png not found, the taskbar icon may be generic.
-if not exist "simple_rcon_tool-splash.png" echo WARNING: simple_rcon_tool-splash.png not found, no splash will show.
 if not exist "fonts" echo WARNING: fonts folder not found, the window will fall back to system fonts.
 
 rem --- make sure PyInstaller is available, install if missing ---
@@ -77,7 +76,6 @@ echo.
 python -m PyInstaller --noconfirm --onedir --windowed ^
     --name "Simple RCON Tool" ^
     --icon "simple_rcon_tool.ico" ^
-    --splash "simple_rcon_tool-splash.png" ^
     --add-data "simple_rcon_tool-UI.html;." ^
     --add-data "simple_rcon_tool.png;." ^
     --add-data "fonts;fonts" ^
