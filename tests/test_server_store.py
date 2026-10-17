@@ -283,3 +283,39 @@ def test_load_warning_for_skipped_records_only(server_file):
     assert app._server_store_warning == (
         f"2 saved servers could not be read and were skipped. The original file was kept as {backup_name}."
     )
+
+
+def new_server(name):
+    return {"id": None, "name": name, "host": "192.0.2.10", "port": 27015, "game": "cs2", "buttons": []}
+
+
+def test_new_server_ids_pass_validation_and_differ():
+    first, second = app._new_server_id(), app._new_server_id()
+
+    assert first != second
+    assert isinstance(app._validate_server(valid_server(id=first), require_catalog_game=False), dict)
+
+
+def test_add_after_deleting_a_middle_server_gets_a_fresh_id(server_file):
+    api = app.Api()
+    ids = [api.save_server(new_server(name))["servers"][-1]["id"] for name in ("A", "B", "C")]
+
+    api.delete_server(ids[1])
+    servers = api.save_server(new_server("D"))["servers"]
+
+    saved_ids = [s["id"] for s in servers]
+    assert [s["name"] for s in servers] == ["A", "C", "D"]
+    assert len(set(saved_ids)) == 3
+    assert saved_ids[2] not in ids
+
+
+def test_edit_after_add_after_delete_changes_only_the_target(server_file):
+    api = app.Api()
+    ids = [api.save_server(new_server(name))["servers"][-1]["id"] for name in ("A", "B", "C")]
+    api.delete_server(ids[1])
+    new_id = api.save_server(new_server("D"))["servers"][-1]["id"]
+
+    edited = dict(new_server("D renamed"), id=new_id)
+    servers = api.save_server(edited)["servers"]
+
+    assert [s["name"] for s in servers] == ["A", "C", "D renamed"]

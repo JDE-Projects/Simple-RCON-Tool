@@ -883,6 +883,11 @@ def _take_server_store_warning():
     return warning
 
 
+def _new_server_id():
+    """A random server ID, so a deleted entry's ID is never handed out again."""
+    return "srv-" + uuid.uuid4().hex
+
+
 def _with_warning(result, warning):
     """Attach a pending storage warning to an API result, if there is one."""
     if warning:
@@ -948,7 +953,7 @@ def load_servers():
             continue
         if cleaned["id"] in seen_ids:
             repaired_ids += 1
-            cleaned["id"] = "srv-" + uuid.uuid4().hex
+            cleaned["id"] = _new_server_id()
             debug_log(f"load_servers record {index} had a duplicate ID and was repaired")
         seen_ids.add(cleaned["id"])
         servers.append(cleaned)
@@ -1186,7 +1191,7 @@ class Api:
             else:
                 servers.append(server)
         else:
-            server["id"] = "srv" + str(int(threading.get_ident()))[:6] + str(len(servers))
+            server["id"] = _new_server_id()
             servers.append(server)
         if not save_servers(servers):
             debug_log(f"save_server write failed: {server['id']}")
