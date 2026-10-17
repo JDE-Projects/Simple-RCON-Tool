@@ -1,0 +1,37 @@
+{
+  "check_update": [],
+  "connect": [
+    "server_id",
+    "password"
+  ],
+  "delete_server": [
+    "server_id"
+  ],
+  "disconnect": [
+    "server_id"
+  ],
+  "disconnect_all": [],
+  "export_console": [
+    "server_name",
+    "text"
+  ],
+  "get_config": [],
+  "get_theme": [],
+  "open_url": [
+    "url"
+  ],
+  "save_server": [
+    "server"
+  ],
+  "save_theme": [
+    "theme"
+  ],
+  "send": [
+    "server_id",
+    "command",
+    "label"
+  ],
+  "set_debug": [
+    "enabled"
+  ]
+}

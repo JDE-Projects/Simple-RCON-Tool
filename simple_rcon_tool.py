@@ -1083,21 +1083,27 @@ def _update_error_reason(exc: BaseException) -> str:
 
 class Api:
     def __init__(self):
-        self.sessions = {}  # server_id -> Session
+        self._sessions = {}  # server_id -> Session
         self._sessions_lock = threading.Lock()
         self._connect_attempts = {}  # server_id -> current connection attempt token
-        self.window = None
-        self.frontend_ready = False
+        self._window = None
+        self._frontend_ready = False
 
     # ---- frontend helpers -------------------------------------------------
 
+    def _set_window(self, window):
+        self._window = window
+
+    def _mark_frontend_ready(self):
+        self._frontend_ready = True
+
     def _emit(self, channel, payload):
-        if not self.window or not self.frontend_ready:
+        if not self._window or not self._frontend_ready:
             return
         data = json.dumps(payload)
         js = f"window.__onPyEvent && window.__onPyEvent({json.dumps(channel)}, {data});"
         try:
-            self.window.evaluate_js(js)
+            self._window.evaluate_js(js)
         except Exception:
             pass
 
@@ -1156,9 +1162,6 @@ class Api:
 
     def set_debug(self, enabled):
         return {"ok": True, "debug": set_debug(enabled)}
-
-    def get_debug(self):
-        return {"ok": True, "debug": _debug_enabled}
 
     # ---- update check -----------------------------------------------------
 
@@ -1246,13 +1249,13 @@ class Api:
     def _pop_session_if_current(self, server_id, sess):
         """Detach *sess* only when it is still this server's live session."""
         with self._sessions_lock:
-            if self.sessions.get(server_id) is sess:
-                return self.sessions.pop(server_id)
+            if self._sessions.get(server_id) is sess:
+                return self._sessions.pop(server_id)
         return None
 
     def _session_is_current(self, server_id, sess):
         with self._sessions_lock:
-            return self.sessions.get(server_id) is sess
+            return self._sessions.get(server_id) is sess
 
     def connect(self, server_id, password):
         attempt = object()
@@ -1284,7 +1287,7 @@ class Api:
                 old_session = None
             else:
                 cancelled = False
-                old_session = self.sessions.pop(server_id, None)
+                old_session = self._sessions.pop(server_id, None)
         if cancelled:
             return _with_warning({"ok": False, "error": "Connection was cancelled."}, warning)
         if old_session:
@@ -1301,7 +1304,7 @@ class Api:
 
         with self._sessions_lock:
             if self._connect_attempts.get(server_id) is attempt:
-                self.sessions[server_id] = sess
+                self._sessions[server_id] = sess
                 self._connect_attempts.pop(server_id, None)
                 installed = True
             else:
@@ -1316,7 +1319,7 @@ class Api:
     def disconnect(self, server_id):
         with self._sessions_lock:
             self._connect_attempts.pop(server_id, None)
-            sess = self.sessions.pop(server_id, None)
+            sess = self._sessions.pop(server_id, None)
         if sess:
             sess.close()
             self._log(server_id, "Disconnected. Password cleared from memory.", "muted")
@@ -1326,8 +1329,8 @@ class Api:
     def disconnect_all(self):
         with self._sessions_lock:
             self._connect_attempts.clear()
-            sessions = list(self.sessions.items())
-            self.sessions.clear()
+            sessions = list(self._sessions.items())
+            self._sessions.clear()
         for server_id, sess in sessions:
             sess.close()
             self._log(server_id, "Disconnected. Password cleared from memory.", "muted")
@@ -1338,7 +1341,7 @@ class Api:
 
     def send(self, server_id, command, label=None):
         with self._sessions_lock:
-            sess = self.sessions.get(server_id)
+            sess = self._sessions.get(server_id)
         if not sess:
             return {"ok": False, "error": "Not connected."}
         command = (command or "").strip()
@@ -1544,7 +1547,7 @@ def main():
         min_size=(980, 660),
         background_color="#0a0e14",
     )
-    api.window = window
+    api._set_window(window)
 
     window.events.shown += lambda: None if IS_SECOND_INSTANCE else _restore_geometry(window)
 
@@ -1555,12 +1558,12 @@ def main():
     window.events.closing += _on_closing
 
     def on_loaded():
-        api.frontend_ready = True
+        api._mark_frontend_ready()
 
     try:
         window.events.loaded += on_loaded
     except Exception:
-        api.frontend_ready = True
+        api._mark_frontend_ready()
 
     # Qt backend (PySide6 + WebEngine). Pass the PNG so the live taskbar icon
     # is ours; guarded so an older pywebview without the icon arg still launches.

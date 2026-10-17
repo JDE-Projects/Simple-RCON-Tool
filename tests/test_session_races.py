@@ -153,7 +153,7 @@ def test_api_connect_auth_failure_leaves_no_session_and_wipes_password(monkeypat
     result = api.connect(SERVER["id"], "wrong-password")
 
     assert result["ok"] is False
-    assert api.sessions == {}
+    assert api._sessions == {}
     assert sock.closed
 
 
@@ -167,14 +167,14 @@ def test_replaced_command_outcome_is_silent_and_keeps_new_session(
     old.command_result = result or ""
     if result is None:
         old.command_error = app.RconError("old command failed")
-    api.sessions[SERVER["id"]] = old
+    api._sessions[SERVER["id"]] = old
     events, debug, debug_called = _record_events(api, monkeypatch)
 
     assert api.send(SERVER["id"], "status") == {"ok": True}
     assert old.command_started.wait(3)
     assert api.disconnect(SERVER["id"]) == {"ok": True}
     assert api.connect(SERVER["id"], "new") == {"ok": True}
-    new = api.sessions[SERVER["id"]]
+    new = api._sessions[SERVER["id"]]
     events.clear()
     debug.clear()
     debug_called.clear()
@@ -182,7 +182,7 @@ def test_replaced_command_outcome_is_silent_and_keeps_new_session(
 
     assert debug_called.wait(3)
 
-    assert api.sessions[SERVER["id"]] is new
+    assert api._sessions[SERVER["id"]] is new
     assert not new.closed
     assert events == []
     assert debug == ["Command outcome from replaced or closed session: srv-one"]
@@ -193,7 +193,7 @@ def test_disconnect_during_command_has_no_second_idle_event(monkeypatch, fake_se
     session = fake_session(SERVER, "password")
     session.block_command = True
     session.command_error = app.RconError("command failed")
-    api.sessions[SERVER["id"]] = session
+    api._sessions[SERVER["id"]] = session
     events, debug, debug_called = _record_events(api, monkeypatch)
 
     assert api.send(SERVER["id"], "status") == {"ok": True}
@@ -231,7 +231,7 @@ def test_delete_cancels_connect_before_it_can_install(monkeypatch, fake_session)
     _join(worker)
 
     assert result == [{"ok": False, "error": "Connection was cancelled."}]
-    assert api.sessions == {}
+    assert api._sessions == {}
     assert FakeSession.instances[0].closed
     assert events == [("status", {"serverId": "srv-one", "state": "idle"})]
 
@@ -256,7 +256,7 @@ def test_disconnect_all_cancels_pending_connect_without_a_session(monkeypatch, f
     _join(worker)
 
     assert result == [{"ok": False, "error": "Connection was cancelled."}]
-    assert api.sessions == {}
+    assert api._sessions == {}
     assert FakeSession.instances[0].closed
 
 
@@ -277,12 +277,12 @@ def test_later_overlapping_connect_installs_and_earlier_session_closes(monkeypat
     assert FakeSession.instances[0].connect_started.wait(3)
 
     assert api.connect(SERVER["id"], "second") == {"ok": True}
-    second = api.sessions[SERVER["id"]]
+    second = api._sessions[SERVER["id"]]
     FakeSession.instances[0].connect_release.set()
     _join(first)
 
     assert first_result == [{"ok": False, "error": "Connection was cancelled."}]
-    assert api.sessions[SERVER["id"]] is second
+    assert api._sessions[SERVER["id"]] is second
     assert FakeSession.instances[0].closed
     assert not second.closed
 
@@ -291,12 +291,12 @@ def test_current_command_failure_logs_removes_closes_and_emits_idle(monkeypatch,
     api = app.Api()
     session = fake_session(SERVER, "password")
     session.command_error = app.RconError("Connection closed by server.")
-    api.sessions[SERVER["id"]] = session
+    api._sessions[SERVER["id"]] = session
     events, _debug, _debug_called = _record_events(api, monkeypatch)
 
     api._exec(SERVER["id"], session, "status", "Status")
 
-    assert api.sessions == {}
+    assert api._sessions == {}
     assert session.closed
     assert ("log", {
         "serverId": "srv-one", "text": "Connection closed by server.", "level": "err",
@@ -312,7 +312,7 @@ def test_running_status_and_echo_are_sent_before_command_runs(monkeypatch, fake_
     api = app.Api()
     session = fake_session(SERVER, "password")
     session.block_command = True
-    api.sessions[SERVER["id"]] = session
+    api._sessions[SERVER["id"]] = session
     events, _debug, _debug_called = _record_events(api, monkeypatch)
 
     assert api.send(SERVER["id"], "status", "Status") == {"ok": True}
@@ -392,4 +392,4 @@ def test_real_api_connect_send_and_disconnect_all_has_no_sessions(server_file):
     assert server.command_complete.wait(3)
     assert api.disconnect_all() == {"ok": True}
     server.close()
-    assert api.sessions == {}
+    assert api._sessions == {}

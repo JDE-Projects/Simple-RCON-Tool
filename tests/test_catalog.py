@@ -31,7 +31,7 @@ def test_connect_rejects_saved_unsupported_game_before_password_check(monkeypatc
     api = app.Api()
 
     assert api.connect("srv-rust", "") == {"ok": False, "error": UNSUPPORTED_GAME_ERROR}
-    assert api.sessions == {}
+    assert api._sessions == {}
 
 
 def test_save_server_rejects_removed_game():
