@@ -615,6 +615,9 @@ class RconClient:
     SERVERDATA_AUTH_RESPONSE = 2
     SERVERDATA_EXECCOMMAND = 2
     SERVERDATA_RESPONSE_VALUE = 0
+    # 9 is ID + type + one null terminator; 65536 is far above Minecraft's 4096-byte replies and stops absurd waits.
+    MIN_PACKET_LENGTH = 9
+    MAX_PACKET_LENGTH = 65536
 
     def __init__(self, host, port, password, timeout=8, *, sentinel=True, reply_ids_lag=False):
         self.host = host
@@ -656,9 +659,20 @@ class RconClient:
 
     def _recv_packet(self):
         (length,) = struct.unpack("<i", self._recv_exact(4))
+        return self._read_packet_body(length)
+
+    def _read_packet_body(self, length):
+        if not self.MIN_PACKET_LENGTH <= length <= self.MAX_PACKET_LENGTH:
+            raise RconError("The server sent an invalid packet.")
         data = self._recv_exact(length)
         req_id, type_ = struct.unpack("<ii", data[:8])
-        body = data[8:-2]  # strip the two trailing null bytes
+        tail = data[8:]
+        if tail.endswith(b"\x00\x00"):
+            body = tail[:-2]
+        elif tail.endswith(b"\x00"):
+            body = tail[:-1]
+        else:
+            raise RconError("The server sent an invalid packet.")
         return req_id, type_, body.decode("utf-8", errors="replace")
 
     def _recv_command_packet(self):
@@ -671,12 +685,9 @@ class RconClient:
         try:
             header += self._recv_exact(4 - len(header))
             (length,) = struct.unpack("<i", header)
-            data = self._recv_exact(length)
+            return self._read_packet_body(length)
         except socket.timeout as exc:
             raise RconError("Timed out while receiving packet.") from exc
-        req_id, type_ = struct.unpack("<ii", data[:8])
-        body = data[8:-2]  # strip the two trailing null bytes
-        return req_id, type_, body.decode("utf-8", errors="replace")
 
     def _recv_packet_after_idle_gap(self, idle_timeout, normal_timeout):
         self.sock.settimeout(idle_timeout)
