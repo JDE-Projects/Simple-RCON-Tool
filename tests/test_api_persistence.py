@@ -50,7 +50,7 @@ def test_delete_failure_returns_error_preserves_session_and_does_not_disconnect(
     original = server_file.read_bytes()
     api = app.Api()
     session = object()
-    api.sessions["srv-one"] = session
+    api._sessions["srv-one"] = session
     disconnected = []
     monkeypatch.setattr(app, "save_servers", lambda _servers: False)
     monkeypatch.setattr(api, "disconnect", lambda server_id: disconnected.append(server_id))
@@ -60,14 +60,14 @@ def test_delete_failure_returns_error_preserves_session_and_does_not_disconnect(
     assert result == {"ok": False, "error": DELETE_ERROR}
     assert server_file.read_bytes() == original
     assert disconnected == []
-    assert api.sessions == {"srv-one": session}
+    assert api._sessions == {"srv-one": session}
 
 
 def test_delete_success_still_disconnects(server_file):
     write_server(server_file)
     api = app.Api()
     session = object()
-    api.sessions["srv-one"] = session
+    api._sessions["srv-one"] = session
     disconnected = []
     api.disconnect = lambda server_id: disconnected.append(server_id)
 
