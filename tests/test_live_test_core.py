@@ -104,6 +104,24 @@ def test_probes_run_first_and_are_recorded_ungraded(monkeypatch, tmp_path):
     assert [row["status"] for row in records] == ["info", "fail"]
 
 
+def test_run_checks_records_no_reply_without_changing_grading(monkeypatch, tmp_path):
+    FakeSession.reply, FakeSession.error, FakeSession.commands, FakeSession.log_path = None, None, [], None
+    monkeypatch.setattr(run, "Session", FakeSession)
+    definition = {"catalog_key": "fake", "rcon_port": 1, "probes": ["help"], "timeouts": {"check": 20, "stop": 1},
+                  "checks": [{"label": "List", "expect": {}, "cleanup": "cleanup"}]}
+    catalog = {"buttons": [{"label": "List", "command": "list"}]}
+
+    records = run.run_checks(definition, catalog, "pw", tmp_path, tmp_path / "server.log", ExitedProcess())
+
+    assert records[0]["actual"] == ""
+    assert records[0]["no_reply"] is True
+    assert records[1]["status"] == "fail"
+    assert records[1]["evidence"] == "empty reply"
+    assert records[1]["actual"] == ""
+    assert records[1]["no_reply"] is True
+    assert records[1]["cleanup"] == {"command": "cleanup", "reply": "", "no_reply": True}
+
+
 def test_say_empty_reply_requires_log_evidence(monkeypatch, tmp_path):
     checks = [{"label": "Say", "arg": "srt-{random}", "expect": {"log_contains_arg": True, "empty_reply_ok": True}}]
     records, redactions, log_path = _checks(monkeypatch, tmp_path, checks, reply="")

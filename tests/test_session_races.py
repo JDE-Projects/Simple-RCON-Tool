@@ -308,6 +308,34 @@ def test_current_command_failure_logs_removes_closes_and_emits_idle(monkeypatch,
     assert events[-1] == ("status", {"serverId": "srv-one", "state": "idle"})
 
 
+def test_no_reply_warns_and_keeps_session_connected(monkeypatch, fake_session):
+    api = app.Api()
+    session = fake_session(SERVER, "password")
+    session.command_result = None
+    api._sessions[SERVER["id"]] = session
+    events, _debug, _debug_called = _record_events(api, monkeypatch)
+
+    api._exec(SERVER["id"], session, "status", "Status")
+
+    assert api._sessions == {SERVER["id"]: session}
+    assert not session.closed
+    assert ("log", {
+        "serverId": "srv-one", "text": "No response from server. The command may not have run.", "level": "warn",
+    }) in events
+    assert events[-1] == ("status", {"serverId": "srv-one", "state": "connected"})
+
+
+def test_empty_reply_still_logs_muted_no_output(monkeypatch, fake_session):
+    api = app.Api()
+    session = fake_session(SERVER, "password")
+    api._sessions[SERVER["id"]] = session
+    events, _debug, _debug_called = _record_events(api, monkeypatch)
+
+    api._exec(SERVER["id"], session, "status", "Status")
+
+    assert ("log", {"serverId": "srv-one", "text": "(no output)", "level": "muted"}) in events
+
+
 def test_running_status_and_echo_are_sent_before_command_runs(monkeypatch, fake_session):
     api = app.Api()
     session = fake_session(SERVER, "password")

@@ -738,6 +738,7 @@ class RconClient:
         previous_id = self._last_sent_id
         command_id = self._send(self.SERVERDATA_EXECCOMMAND, cmd)
         parts = []
+        received_reply = False
         normal_timeout = self.sock.gettimeout()
         try:
             if self.sentinel:
@@ -752,9 +753,11 @@ class RconClient:
                             continue
                         # Any other id counts as reply text: not every server
                         # echoes the command's id.
+                        received_reply = True
                         parts.append(body)
                 except socket.timeout:
-                    pass  # some servers do not echo the sentinel; return what we have
+                    if not received_reply:
+                        return None
             else:
                 accepted_ids = {command_id}
                 if self.reply_ids_lag and previous_id is not None:
@@ -763,10 +766,11 @@ class RconClient:
                     while True:
                         req_id, _, body = self._recv_command_packet()
                         if req_id in accepted_ids:
+                            received_reply = True
                             parts.append(body)
                             break
                 except socket.timeout:
-                    return "".join(parts).strip()
+                    return "".join(parts).strip() if received_reply else None
 
                 idle_deadline = time.monotonic() + RCON_REPLY_IDLE_GAP
                 while True:
@@ -1431,7 +1435,9 @@ class Api:
             return
 
         if error is None:
-            if resp:
+            if resp is None:
+                self._log(server_id, "No response from server. The command may not have run.", "warn")
+            elif resp:
                 for line in resp.splitlines():
                     self._log(server_id, line, "out")
             else:

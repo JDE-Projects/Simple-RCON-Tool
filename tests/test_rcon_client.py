@@ -185,6 +185,52 @@ def test_sentinel_mode_discards_prior_marker_within_next_reply(client_factory):
     assert client.command("second") == "beforeafter"
 
 
+def test_sentinel_mode_no_reply_returns_none_and_restores_timeout(client_factory):
+    def handler(conn):
+        _recv_packet(conn)
+        _recv_packet(conn)
+
+    client = client_factory(handler)
+    assert client.command("status") is None
+    assert client.sock.gettimeout() == 1
+
+
+def test_sentinel_echo_without_reply_returns_empty_string(client_factory):
+    def handler(conn):
+        _recv_packet(conn)
+        sentinel_id, _, _ = _recv_packet(conn)
+        conn.sendall(_packet(sentinel_id, RconClient.SERVERDATA_RESPONSE_VALUE, ""))
+
+    client = client_factory(handler)
+    assert client.command("status") == ""
+
+
+def test_sentinel_mode_partial_reply_then_timeout_returns_partial_text(client_factory):
+    def handler(conn):
+        command_id, _, _ = _recv_packet(conn)
+        _recv_packet(conn)
+        conn.sendall(_packet(command_id, RconClient.SERVERDATA_RESPONSE_VALUE, "partial"))
+
+    client = client_factory(handler)
+    assert client.command("status") == "partial"
+
+
+def test_sentinel_mode_stale_markers_then_timeout_return_none(client_factory):
+    def handler(conn):
+        first_id, _, _ = _recv_packet(conn)
+        first_sentinel_id, _, _ = _recv_packet(conn)
+        conn.sendall(_packet(first_id, RconClient.SERVERDATA_RESPONSE_VALUE, "first"))
+        conn.sendall(_packet(first_sentinel_id, RconClient.SERVERDATA_RESPONSE_VALUE, ""))
+
+        _recv_packet(conn)
+        _recv_packet(conn)
+        conn.sendall(_packet(first_sentinel_id, RconClient.SERVERDATA_RESPONSE_VALUE, "stale"))
+
+    client = client_factory(handler)
+    assert client.command("first") == "first"
+    assert client.command("second") is None
+
+
 def test_no_sentinel_sends_no_sentinel_and_reuses_connection(client_factory):
     def handler(conn):
         for expected in ("first", "second"):
@@ -196,6 +242,32 @@ def test_no_sentinel_sends_no_sentinel_and_reuses_connection(client_factory):
     client = client_factory(handler, sentinel=False)
     assert client.command("first") == "first"
     assert client.command("second") == "second"
+
+
+def test_no_sentinel_no_reply_returns_none(client_factory):
+    def handler(conn):
+        _recv_packet(conn)
+
+    client = client_factory(handler, sentinel=False)
+    assert client.command("status") is None
+
+
+def test_no_sentinel_empty_reply_returns_empty_string(client_factory):
+    def handler(conn):
+        command_id, _, _ = _recv_packet(conn)
+        conn.sendall(_packet(command_id, RconClient.SERVERDATA_AUTH_RESPONSE, ""))
+
+    client = client_factory(handler, sentinel=False)
+    assert client.command("status") == ""
+
+
+def test_no_sentinel_partial_reply_then_timeout_returns_partial_text(client_factory):
+    def handler(conn):
+        command_id, _, _ = _recv_packet(conn)
+        conn.sendall(_packet(command_id, RconClient.SERVERDATA_AUTH_RESPONSE, "partial"))
+
+    client = client_factory(handler, sentinel=False)
+    assert client.command("status") == "partial"
 
 
 def test_no_sentinel_joins_packets_within_idle_gap(client_factory):
