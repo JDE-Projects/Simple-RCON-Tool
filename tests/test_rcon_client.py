@@ -33,8 +33,9 @@ def _recv_packet(sock):
 
 
 class FakeRconServer:
-    def __init__(self, handler):
+    def __init__(self, handler, *, auth_reply=None):
         self._handler = handler
+        self._auth_reply = auth_reply
         self._listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._listener.bind(("127.0.0.1", 0))
@@ -50,9 +51,15 @@ class FakeRconServer:
             with conn:
                 auth_id, auth_type, _ = _recv_packet(conn)
                 assert auth_type == RconClient.SERVERDATA_AUTH
-                conn.sendall(_packet(auth_id, RconClient.SERVERDATA_AUTH_RESPONSE, ""))
+                auth_reply = self._auth_reply
+                if auth_reply is None:
+                    auth_reply = _packet(auth_id, RconClient.SERVERDATA_AUTH_RESPONSE, "")
+                conn.sendall(auth_reply)
                 self._handler(conn)
-                conn.recv(1)  # Keep the connection open until the client closes it.
+                try:
+                    conn.recv(1)  # Keep the connection open until the client closes it.
+                except ConnectionResetError:
+                    pass  # The client may reject a header before reading its trailing bytes.
         except Exception as exc:
             self.error = exc
         finally:
@@ -298,6 +305,133 @@ def test_close_mid_packet_raises_rcon_error(client_factory, sentinel):
     client = client_factory(handler, sentinel=sentinel)
     with pytest.raises(RconError, match="Connection closed by server"):
         client.command("status")
+
+
+@pytest.mark.parametrize("sentinel", [True, False])
+def test_negative_packet_length_raises_invalid_packet_without_waiting(client_factory, sentinel):
+    def handler(conn):
+        _recv_packet(conn)
+        if sentinel:
+            _recv_packet(conn)
+        conn.sendall(struct.pack("<i", -1))
+
+    client = client_factory(handler, sentinel=sentinel)
+    started = time.monotonic()
+    with pytest.raises(RconError, match="invalid packet"):
+        client.command("status")
+    assert time.monotonic() - started < 0.5
+
+
+@pytest.mark.parametrize("sentinel", [True, False])
+def test_too_small_packet_length_raises_invalid_packet(client_factory, sentinel):
+    def handler(conn):
+        _recv_packet(conn)
+        if sentinel:
+            _recv_packet(conn)
+        conn.sendall(struct.pack("<i", 8) + b"\x00" * 8)
+
+    client = client_factory(handler, sentinel=sentinel)
+    with pytest.raises(RconError, match="invalid packet"):
+        client.command("status")
+
+
+@pytest.mark.parametrize("sentinel", [True, False])
+def test_oversized_packet_length_raises_invalid_packet_without_body(client_factory, sentinel):
+    def handler(conn):
+        _recv_packet(conn)
+        if sentinel:
+            _recv_packet(conn)
+        conn.sendall(struct.pack("<i", 65537))
+
+    client = client_factory(handler, sentinel=sentinel)
+    with pytest.raises(RconError, match="invalid packet"):
+        client.command("status")
+
+
+@pytest.mark.parametrize("sentinel", [True, False])
+def test_truncated_valid_length_packet_raises_connection_closed(client_factory, sentinel):
+    def handler(conn):
+        _recv_packet(conn)
+        if sentinel:
+            _recv_packet(conn)
+        response = struct.pack("<ii", 1, RconClient.SERVERDATA_RESPONSE_VALUE) + b"x"
+        conn.sendall(struct.pack("<i", 10) + response)
+        conn.shutdown(socket.SHUT_WR)
+
+    client = client_factory(handler, sentinel=sentinel)
+    with pytest.raises(RconError, match="Connection closed by server"):
+        client.command("status")
+
+
+@pytest.mark.parametrize("sentinel", [True, False])
+def test_unterminated_packet_raises_invalid_packet(client_factory, sentinel):
+    def handler(conn):
+        command_id, _, _ = _recv_packet(conn)
+        if sentinel:
+            _recv_packet(conn)
+        response = struct.pack("<ii", command_id, RconClient.SERVERDATA_RESPONSE_VALUE) + b"x"
+        conn.sendall(struct.pack("<i", len(response)) + response)
+
+    client = client_factory(handler, sentinel=sentinel)
+    with pytest.raises(RconError, match="invalid packet"):
+        client.command("status")
+
+
+@pytest.mark.parametrize("sentinel", [True, False])
+def test_single_null_terminator_is_accepted(client_factory, sentinel):
+    def handler(conn):
+        command_id, _, _ = _recv_packet(conn)
+        if sentinel:
+            sentinel_id, _, _ = _recv_packet(conn)
+        response = struct.pack("<ii", command_id, RconClient.SERVERDATA_RESPONSE_VALUE) + b"reply\x00"
+        conn.sendall(struct.pack("<i", len(response)) + response)
+        if sentinel:
+            conn.sendall(_packet(sentinel_id, RconClient.SERVERDATA_RESPONSE_VALUE, ""))
+
+    client = client_factory(handler, sentinel=sentinel)
+    assert client.command("status") == "reply"
+
+
+@pytest.mark.parametrize("sentinel", [True, False])
+def test_minimum_packet_length_with_single_null_is_accepted(client_factory, sentinel):
+    def handler(conn):
+        command_id, _, _ = _recv_packet(conn)
+        if sentinel:
+            sentinel_id, _, _ = _recv_packet(conn)
+        response = struct.pack("<ii", command_id, RconClient.SERVERDATA_RESPONSE_VALUE) + b"\x00"
+        conn.sendall(struct.pack("<i", len(response)) + response)
+        if sentinel:
+            conn.sendall(_packet(sentinel_id, RconClient.SERVERDATA_RESPONSE_VALUE, ""))
+
+    client = client_factory(handler, sentinel=sentinel)
+    assert client.command("status") == ""
+
+
+@pytest.mark.parametrize("sentinel", [True, False])
+def test_4096_byte_body_is_accepted(client_factory, sentinel):
+    body = "x" * 4096
+
+    def handler(conn):
+        command_id, _, _ = _recv_packet(conn)
+        if sentinel:
+            sentinel_id, _, _ = _recv_packet(conn)
+        conn.sendall(_packet(command_id, RconClient.SERVERDATA_RESPONSE_VALUE, body))
+        if sentinel:
+            conn.sendall(_packet(sentinel_id, RconClient.SERVERDATA_RESPONSE_VALUE, ""))
+
+    client = client_factory(handler, sentinel=sentinel)
+    assert client.command("status") == body
+
+
+def test_auth_invalid_packet_length_raises_invalid_packet():
+    server = FakeRconServer(lambda conn: None, auth_reply=struct.pack("<i", -1))
+    client = RconClient("127.0.0.1", server.port, "password", timeout=1)
+    try:
+        with pytest.raises(RconError, match="invalid packet"):
+            client.connect()
+    finally:
+        client.close()
+        server.close()
 
 
 @pytest.mark.parametrize("sentinel", [True, False])
