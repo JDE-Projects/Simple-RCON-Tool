@@ -397,6 +397,9 @@ def _version_gt(a, b):
 #   protocol  "source" for the Source RCON client
 #   note      shown in the editor (mod requirements, quirks, status)
 #   buttons   locked command buttons rendered for every server of this game
+#   sentinel  whether the client sends an empty marker packet after each command to find the reply's end
+#   reply_ids_lag  whether command replies may carry the previous request's ID
+#   ignore_event_packets  skips unsolicited type-1 event packets that are never command output
 #
 # Button fields:
 #   label     button text
@@ -544,6 +547,7 @@ GAME_CATALOG = [
     {
         "key": "squad", "name": "Squad", "protocol": "source",
         "sentinel": False,
+        "ignore_event_packets": True,
         "note": "Default RCON port 21114. RCON stays off until Password is set "
                 "in ServerConfig/Rcon.cfg; it listens on every address unless IP "
                 "is set there. For about 10 s after a start, commands get no "
@@ -620,6 +624,11 @@ def game_reply_ids_lag(game_key):
     return g.get("reply_ids_lag", False) if g else False
 
 
+def game_ignores_event_packets(game_key):
+    g = CATALOG_BY_KEY.get(game_key)
+    return g.get("ignore_event_packets", False) if g else False
+
+
 # ----------------------------------------------------------------------------
 # Source RCON client (standard library only)
 # ----------------------------------------------------------------------------
@@ -662,6 +671,7 @@ class _RconIdleTimeout(Exception):
 
 
 class RconClient:
+    SERVERDATA_EVENT = 1
     SERVERDATA_AUTH = 3
     SERVERDATA_AUTH_RESPONSE = 2
     SERVERDATA_EXECCOMMAND = 2
@@ -670,13 +680,17 @@ class RconClient:
     MIN_PACKET_LENGTH = 9
     MAX_PACKET_LENGTH = 65536
 
-    def __init__(self, host, port, password, timeout=8, *, sentinel=True, reply_ids_lag=False):
+    def __init__(
+        self, host, port, password, timeout=8, *, sentinel=True, reply_ids_lag=False,
+        ignore_event_packets=False,
+    ):
         self.host = host
         self.port = int(port)
         self.password = password  # memory only
         self.timeout = timeout
         self.sentinel = sentinel
         self.reply_ids_lag = reply_ids_lag
+        self.ignore_event_packets = ignore_event_packets
         self.sock = None
         self._id = 0
         self._last_sent_id = None
@@ -755,13 +769,18 @@ class RconClient:
 
     def _authenticate(self):
         self._send(self.SERVERDATA_AUTH, self.password)
-        while True:
-            req_id, type_, _ = self._recv_packet()
-            if type_ == self.SERVERDATA_AUTH_RESPONSE:
-                if req_id == -1:
-                    raise RconError("Authentication failed (wrong RCON password).")
-                return
-            # ignore the mirrored empty packet some servers send first
+        try:
+            while True:
+                req_id, type_, _ = self._recv_packet()
+                if type_ == self.SERVERDATA_AUTH_RESPONSE:
+                    if req_id == -1:
+                        raise RconError("Authentication failed (wrong RCON password).")
+                    return
+                # ignore the mirrored empty packet some servers send first
+        except RconConnectionClosed as exc:
+            raise RconError(
+                "The server closed the connection during login. The RCON password may be wrong."
+            ) from exc
 
     def command(self, cmd):
         previous_id = self._last_sent_id
@@ -775,7 +794,9 @@ class RconClient:
                 self._sentinel_ids.add(sentinel_id)
                 try:
                     while True:
-                        req_id, _, body = self._recv_command_packet()
+                        req_id, type_, body = self._recv_command_packet()
+                        if self.ignore_event_packets and type_ == self.SERVERDATA_EVENT:
+                            continue
                         if req_id == sentinel_id:
                             break
                         if req_id in self._sentinel_ids:
@@ -793,7 +814,9 @@ class RconClient:
                     accepted_ids.add(previous_id)
                 try:
                     while True:
-                        req_id, _, body = self._recv_command_packet()
+                        req_id, type_, body = self._recv_command_packet()
+                        if self.ignore_event_packets and type_ == self.SERVERDATA_EVENT:
+                            continue
                         if req_id in accepted_ids:
                             received_reply = True
                             parts.append(body)
@@ -807,11 +830,13 @@ class RconClient:
                     if idle_timeout <= 0:
                         break
                     try:
-                        req_id, _, body = self._recv_packet_after_idle_gap(
+                        req_id, type_, body = self._recv_packet_after_idle_gap(
                             idle_timeout, normal_timeout
                         )
                     except _RconIdleTimeout:
                         break
+                    if self.ignore_event_packets and type_ == self.SERVERDATA_EVENT:
+                        continue
                     if req_id in accepted_ids:
                         parts.append(body)
                         idle_deadline = time.monotonic() + RCON_REPLY_IDLE_GAP
@@ -839,6 +864,7 @@ class Session:
             server["host"], server["port"], password,
             sentinel=game_uses_sentinel(server.get("game")),
             reply_ids_lag=game_reply_ids_lag(server.get("game")),
+            ignore_event_packets=game_ignores_event_packets(server.get("game")),
         )
         self.lock = threading.Lock()  # one command at a time per socket
 

@@ -6,7 +6,8 @@ import time
 import pytest
 
 from simple_rcon_tool import (
-    RconClient, RconConnectionClosed, RconError, Session, game_reply_ids_lag, game_uses_sentinel,
+    RconClient, RconConnectionClosed, RconError, Session, game_ignores_event_packets,
+    game_reply_ids_lag, game_uses_sentinel,
 )
 
 
@@ -33,9 +34,10 @@ def _recv_packet(sock):
 
 
 class FakeRconServer:
-    def __init__(self, handler, *, auth_reply=None):
+    def __init__(self, handler, *, auth_reply=None, close_after_auth=False):
         self._handler = handler
         self._auth_reply = auth_reply
+        self._close_after_auth = close_after_auth
         self._listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._listener.bind(("127.0.0.1", 0))
@@ -51,6 +53,8 @@ class FakeRconServer:
             with conn:
                 auth_id, auth_type, _ = _recv_packet(conn)
                 assert auth_type == RconClient.SERVERDATA_AUTH
+                if self._close_after_auth:
+                    return
                 auth_reply = self._auth_reply
                 if auth_reply is None:
                     auth_reply = _packet(auth_id, RconClient.SERVERDATA_AUTH_RESPONSE, "")
@@ -77,11 +81,12 @@ def client_factory():
     clients = []
     servers = []
 
-    def create(handler, *, sentinel=True, reply_ids_lag=False):
+    def create(handler, *, sentinel=True, reply_ids_lag=False, ignore_event_packets=False):
         server = FakeRconServer(handler)
         client = RconClient(
             "127.0.0.1", server.port, "password", timeout=1,
             sentinel=sentinel, reply_ids_lag=reply_ids_lag,
+            ignore_event_packets=ignore_event_packets,
         )
         client.connect()
         clients.append(client)
@@ -279,6 +284,59 @@ def test_no_sentinel_joins_packets_within_idle_gap(client_factory):
 
     client = client_factory(handler, sentinel=False)
     assert client.command("status") == "first second"
+
+
+def test_no_sentinel_ignores_event_packets_before_reply(client_factory):
+    def handler(conn):
+        command_id, _, _ = _recv_packet(conn)
+        conn.sendall(_packet(0, RconClient.SERVERDATA_EVENT, "event before reply"))
+        conn.sendall(_packet(command_id, RconClient.SERVERDATA_EVENT, "event with command ID"))
+        conn.sendall(_packet(command_id, RconClient.SERVERDATA_RESPONSE_VALUE, "reply"))
+
+    client = client_factory(handler, sentinel=False, ignore_event_packets=True)
+    assert client.command("status") == "reply"
+
+
+def test_sentinel_ignores_event_packets_before_reply(client_factory):
+    def handler(conn):
+        command_id, _, _ = _recv_packet(conn)
+        sentinel_id, _, _ = _recv_packet(conn)
+        conn.sendall(_packet(command_id, RconClient.SERVERDATA_EVENT, "event"))
+        conn.sendall(_packet(command_id, RconClient.SERVERDATA_RESPONSE_VALUE, "reply"))
+        conn.sendall(_packet(sentinel_id, RconClient.SERVERDATA_RESPONSE_VALUE, ""))
+
+    client = client_factory(ignore_event_packets=True, handler=handler)
+    assert client.command("status") == "reply"
+
+
+def test_no_sentinel_only_event_packets_return_none(client_factory):
+    def handler(conn):
+        command_id, _, _ = _recv_packet(conn)
+        conn.sendall(_packet(0, RconClient.SERVERDATA_EVENT, "first event"))
+        conn.sendall(_packet(command_id, RconClient.SERVERDATA_EVENT, "second event"))
+
+    client = client_factory(handler, sentinel=False, ignore_event_packets=True)
+    assert client.command("status") is None
+
+
+def test_no_sentinel_ignores_event_packet_during_idle_gap(client_factory):
+    def handler(conn):
+        command_id, _, _ = _recv_packet(conn)
+        conn.sendall(_packet(command_id, RconClient.SERVERDATA_RESPONSE_VALUE, "reply"))
+        time.sleep(0.05)
+        conn.sendall(_packet(command_id, RconClient.SERVERDATA_EVENT, "event"))
+
+    client = client_factory(handler, sentinel=False, ignore_event_packets=True)
+    assert client.command("status") == "reply"
+
+
+def test_no_sentinel_accepts_event_packet_by_default(client_factory):
+    def handler(conn):
+        command_id, _, _ = _recv_packet(conn)
+        conn.sendall(_packet(command_id, RconClient.SERVERDATA_EVENT, "event"))
+
+    client = client_factory(handler, sentinel=False)
+    assert client.command("status") == "event"
 
 
 def test_no_sentinel_lagged_reply_ids_work_after_auth_and_next_command(client_factory):
@@ -506,6 +564,36 @@ def test_auth_invalid_packet_length_raises_invalid_packet():
         server.close()
 
 
+def test_auth_close_raises_login_password_message():
+    server = FakeRconServer(lambda conn: None, close_after_auth=True)
+    client = RconClient("127.0.0.1", server.port, "password", timeout=1)
+    try:
+        with pytest.raises(RconError) as exc_info:
+            client.connect()
+        assert str(exc_info.value) == (
+            "The server closed the connection during login. The RCON password may be wrong."
+        )
+        assert "Authentication failed" not in str(exc_info.value)
+    finally:
+        client.close()
+        server.close()
+
+
+def test_auth_rejection_keeps_wrong_password_message():
+    server = FakeRconServer(
+        lambda conn: None,
+        auth_reply=_packet(-1, RconClient.SERVERDATA_AUTH_RESPONSE, ""),
+    )
+    client = RconClient("127.0.0.1", server.port, "password", timeout=1)
+    try:
+        with pytest.raises(RconError) as exc_info:
+            client.connect()
+        assert str(exc_info.value) == "Authentication failed (wrong RCON password)."
+    finally:
+        client.close()
+        server.close()
+
+
 @pytest.mark.parametrize("sentinel", [True, False])
 def test_timeout_mid_packet_raises_rcon_error(client_factory, sentinel):
     def handler(conn):
@@ -544,6 +632,12 @@ def test_game_reply_ids_lag_for_conan_and_other_games():
     assert game_reply_ids_lag("unknown") is False
 
 
+def test_game_ignores_event_packets_for_squad_and_other_games():
+    assert game_ignores_event_packets("squad") is True
+    assert game_ignores_event_packets("minecraft") is False
+    assert game_ignores_event_packets("unknown") is False
+
+
 @pytest.mark.parametrize(
     ("game", "expected"),
     [
@@ -558,3 +652,12 @@ def test_session_passes_game_sentinel_flag_to_client(game, expected):
 def test_session_passes_game_reply_ids_lag_flag_to_client():
     server = {"host": "127.0.0.1", "port": 27015, "game": "conan"}
     assert Session(server, "password").client.reply_ids_lag is True
+
+
+@pytest.mark.parametrize(
+    ("game", "expected"),
+    [("squad", True), ("minecraft", False)],
+)
+def test_session_passes_game_event_packet_flag_to_client(game, expected):
+    server = {"host": "127.0.0.1", "port": 27015, "game": game}
+    assert Session(server, "password").client.ignore_event_packets is expected
