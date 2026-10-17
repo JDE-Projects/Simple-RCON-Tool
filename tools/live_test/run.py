@@ -111,9 +111,10 @@ def run_checks(definition: dict, catalog: dict, password: str, run_dir: Path, lo
                 reply = session.command(command)
             except Exception as exc:
                 error = exc
-            records.append({"label": f"probe: {command}", "status": "info", "expected": {}, "actual": reply,
+            no_reply = reply is None
+            records.append({"label": f"probe: {command}", "status": "info", "expected": {}, "actual": reply or "",
                             "evidence": "recorded, not graded", "timing_seconds": round(time.time() - started, 3),
-                            "exception": str(error) if error else None})
+                            "exception": str(error) if error else None, **({"no_reply": True} if no_reply else {})})
         for check in definition["checks"]:
             button, started, started_monotonic = buttons[check["label"]], time.time(), time.monotonic()
             token = secrets.token_hex(4)
@@ -128,6 +129,8 @@ def run_checks(definition: dict, catalog: dict, password: str, run_dir: Path, lo
                 error = exc
             if time.monotonic() - started_monotonic > definition["timeouts"]["check"]:
                 error = TimeoutError(f"check exceeded {definition['timeouts']['check']} seconds")
+            no_reply = reply is None
+            reply = reply or ""
             expected = check.get("expect", {})
             effect = evidence_for(expected, run_dir, log_path, started, arg)
             # Some servers act after replying (a queued save, a shutdown); "evidence_wait" keeps looking that many seconds.
@@ -148,11 +151,13 @@ def run_checks(definition: dict, catalog: dict, password: str, run_dir: Path, lo
             shown = {key: value.__name__ if callable(value) else value for key, value in expected.items()}
             records.append({"label": check["label"], "status": status, "expected": shown, "actual": reply,
                             "evidence": note, "timing_seconds": round(time.time() - started, 3),
-                            "exception": str(error) if error else None})
+                            "exception": str(error) if error else None, **({"no_reply": True} if no_reply else {})})
             if check.get("cleanup"):
                 try:
                     cleanup_reply = session.command(check["cleanup"])
-                    records[-1]["cleanup"] = {"command": check["cleanup"], "reply": cleanup_reply}
+                    cleanup_no_reply = cleanup_reply is None
+                    records[-1]["cleanup"] = {"command": check["cleanup"], "reply": cleanup_reply or "",
+                                                **({"no_reply": True} if cleanup_no_reply else {})}
                 except Exception as exc:
                     records[-1]["cleanup"] = {"command": check["cleanup"], "exception": str(exc)}
     finally:
