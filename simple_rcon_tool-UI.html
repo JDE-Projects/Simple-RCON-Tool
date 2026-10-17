@@ -1030,6 +1030,7 @@
       $('dbgToggle').checked = !!cfg.debug;
       populateGameSelect();
       render();
+      if (cfg.storeWarning) addLine(cfg.storeWarning, 'err');
 
       // quiet startup update check; only show if an update is available
       try {
