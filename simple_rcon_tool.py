@@ -402,6 +402,7 @@ def _version_gt(a, b):
 #   label     button text
 #   command   RCON command; "{arg}" pops an input box when clicked
 #   confirm   optional confirmation message string for destructive actions
+#   stops_server  marks a command that stops the server and its RCON connection
 #   argmode   optional "underscore" to swap spaces for underscores in the arg
 #
 # Commands were verified per game. Only games with genuinely useful command
@@ -430,7 +431,7 @@ GAME_CATALOG = [
              "confirm": "Ban this player?"},
             {"label": "Unban Player", "command": "UnbanPlayer {arg}"},
             {"label": "Shutdown", "command": "DoExit",
-             "confirm": "Shut the server down now?"},
+             "confirm": "Shut the server down now?", "stops_server": True},
         ],
     },
     {
@@ -454,7 +455,7 @@ GAME_CATALOG = [
              "confirm": "Ban this player?"},
             {"label": "Unban Player", "command": "UnbanPlayer {arg}"},
             {"label": "Shutdown", "command": "DoExit",
-             "confirm": "Shut the server down now?"},
+             "confirm": "Shut the server down now?", "stops_server": True},
         ],
     },
     {
@@ -490,7 +491,7 @@ GAME_CATALOG = [
             {"label": "Shutdown 60s", "command": "Shutdown 60 Restarting",
              "confirm": "Begin a 60-second shutdown?"},
             {"label": "Force Stop", "command": "DoExit",
-             "confirm": "Force the server to stop now?"},
+             "confirm": "Force the server to stop now?", "stops_server": True},
         ],
     },
     {
@@ -506,7 +507,8 @@ GAME_CATALOG = [
             {"label": "Ban List", "command": "banlist"},
             {"label": "Weather Clear", "command": "weather clear"},
             {"label": "Set Day", "command": "time set day"},
-            {"label": "Stop Server", "command": "stop", "confirm": "Stop the server?"},
+            {"label": "Stop Server", "command": "stop", "confirm": "Stop the server?",
+             "stops_server": True},
         ],
     },
     {
@@ -535,7 +537,8 @@ GAME_CATALOG = [
             {"label": "Ban User", "command": "banuser {arg}", "confirm": "Ban this user?"},
             {"label": "Unban User", "command": "unbanuser {arg}"},
             {"label": "Show Options", "command": "showoptions"},
-            {"label": "Save & Quit", "command": "quit", "confirm": "Save and stop the server?"},
+            {"label": "Save & Quit", "command": "quit", "confirm": "Save and stop the server?",
+             "stops_server": True},
         ],
     },
     {
@@ -628,6 +631,32 @@ class RconError(Exception):
     pass
 
 
+class RconConnectionClosed(RconError):
+    pass
+
+
+def is_stop_command(game_key, command):
+    # Matches on command text, so a typed stop command counts the same as the button.
+    game = CATALOG_BY_KEY.get(game_key)
+    if not game:
+        return False
+    command = command.strip().casefold()
+    return any(
+        button.get("stops_server") and button["command"].strip().casefold() == command
+        for button in game["buttons"]
+    )
+
+
+def stop_outcome(reply, error):
+    if isinstance(error, (RconConnectionClosed, ConnectionResetError, ConnectionAbortedError)):
+        return "expected_disconnect"
+    if error is not None:
+        return "failed"
+    if reply is None:
+        return "no_reply"
+    return "replied"
+
+
 class _RconIdleTimeout(Exception):
     pass
 
@@ -675,7 +704,7 @@ class RconClient:
         while len(buf) < n:
             chunk = self.sock.recv(n - len(buf))
             if not chunk:
-                raise RconError("Connection closed by server.")
+                raise RconConnectionClosed("Connection closed by server.")
             buf += chunk
         return buf
 
@@ -700,7 +729,7 @@ class RconClient:
     def _recv_command_packet(self):
         header = self.sock.recv(4)
         if not header:
-            raise RconError("Connection closed by server.")
+            raise RconConnectionClosed("Connection closed by server.")
         return self._recv_packet_from_header(header)
 
     def _recv_packet_from_header(self, header):
@@ -721,7 +750,7 @@ class RconClient:
         finally:
             self.sock.settimeout(normal_timeout)
         if not header:
-            raise RconError("Connection closed by server.")
+            raise RconConnectionClosed("Connection closed by server.")
         return self._recv_packet_from_header(header)
 
     def _authenticate(self):
@@ -1433,6 +1462,30 @@ class Api:
                 sess.close()
             debug_log(f"Command outcome from replaced or closed session: {server_id}")
             return
+
+        if is_stop_command(game_key, command):
+            outcome = stop_outcome(resp, error)
+            if outcome == "expected_disconnect":
+                debug_log(f"command: {type(error).__name__}: {error}")
+                self._log(server_id, "Server closed the connection, as expected after a stop command.", "muted")
+                stopped_session = self._pop_session_if_current(server_id, sess)
+                if stopped_session:
+                    stopped_session.close()
+                    self._log(server_id, "Disconnected. Password cleared from memory.", "muted")
+                    self._emit("status", {"serverId": server_id, "state": "idle"})
+                return
+            if outcome == "replied":
+                if resp:
+                    for line in resp.splitlines():
+                        self._log(server_id, line, "out")
+                else:
+                    self._log(server_id, "(no output)", "muted")
+                stopped_session = self._pop_session_if_current(server_id, sess)
+                if stopped_session:
+                    stopped_session.close()
+                    self._log(server_id, "Stop command sent. Disconnected. Password cleared from memory.", "muted")
+                    self._emit("status", {"serverId": server_id, "state": "idle"})
+                return
 
         if error is None:
             if resp is None:

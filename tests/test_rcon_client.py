@@ -6,7 +6,7 @@ import time
 import pytest
 
 from simple_rcon_tool import (
-    RconClient, RconError, Session, game_reply_ids_lag, game_uses_sentinel,
+    RconClient, RconConnectionClosed, RconError, Session, game_reply_ids_lag, game_uses_sentinel,
 )
 
 
@@ -375,7 +375,7 @@ def test_close_mid_packet_raises_rcon_error(client_factory, sentinel):
         conn.shutdown(socket.SHUT_WR)
 
     client = client_factory(handler, sentinel=sentinel)
-    with pytest.raises(RconError, match="Connection closed by server"):
+    with pytest.raises(RconConnectionClosed, match="Connection closed by server"):
         client.command("status")
 
 
@@ -431,7 +431,7 @@ def test_truncated_valid_length_packet_raises_connection_closed(client_factory, 
         conn.shutdown(socket.SHUT_WR)
 
     client = client_factory(handler, sentinel=sentinel)
-    with pytest.raises(RconError, match="Connection closed by server"):
+    with pytest.raises(RconConnectionClosed, match="Connection closed by server"):
         client.command("status")
 
 

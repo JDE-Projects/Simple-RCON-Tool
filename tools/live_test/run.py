@@ -10,7 +10,7 @@ import time
 import zipfile
 from pathlib import Path
 
-from simple_rcon_tool import CATALOG_BY_KEY, Session
+from simple_rcon_tool import CATALOG_BY_KEY, Session, stop_outcome
 from tools.live_test.core import (LiveTestError, WindowsJob, classify_check, download_verified, fill_command,
                                   fresh_password, listener_confirmed, ports_free, utc_stamp,
                                   validate_definition, verify_file, write_results)
@@ -127,6 +127,7 @@ def run_checks(definition: dict, catalog: dict, password: str, run_dir: Path, lo
                 reply = session.command(command)
             except Exception as exc:  # Expected for stop/disconnect commands.
                 error = exc
+            app_outcome = stop_outcome(reply, error) if check.get("stop") else None
             if time.monotonic() - started_monotonic > definition["timeouts"]["check"]:
                 error = TimeoutError(f"check exceeded {definition['timeouts']['check']} seconds")
             no_reply = reply is None
@@ -151,7 +152,8 @@ def run_checks(definition: dict, catalog: dict, password: str, run_dir: Path, lo
             shown = {key: value.__name__ if callable(value) else value for key, value in expected.items()}
             records.append({"label": check["label"], "status": status, "expected": shown, "actual": reply,
                             "evidence": note, "timing_seconds": round(time.time() - started, 3),
-                            "exception": str(error) if error else None, **({"no_reply": True} if no_reply else {})})
+                            "exception": str(error) if error else None, **({"no_reply": True} if no_reply else {}),
+                            **({"app_outcome": app_outcome} if check.get("stop") else {})})
             if check.get("cleanup"):
                 try:
                     cleanup_reply = session.command(check["cleanup"])
