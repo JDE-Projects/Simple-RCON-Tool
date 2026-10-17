@@ -956,7 +956,12 @@
   async function toggleTheme(){
     const next = currentTheme === "light" ? "dark" : "light";
     applyTheme(next);
-    if(window.pywebview && window.pywebview.api) await window.pywebview.api.save_theme(next);
+    if(window.pywebview && window.pywebview.api) try{
+      const r = await window.pywebview.api.save_theme(next);
+      if(!r || !r.ok) addLine((r && r.error) || "Couldn't save the theme choice. It will stay until you close the app.", 'err');
+    }catch(e){
+      addLine("Couldn't save the theme choice. It will stay until you close the app.", 'err');
+    }
   }
   async function initTheme(){ if(!(window.pywebview && window.pywebview.api)) return;
     try{ const t = await window.pywebview.api.get_theme(); applyTheme(t || "dark"); }catch(e){} }
