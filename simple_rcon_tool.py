@@ -33,6 +33,7 @@ import struct
 import threading
 import urllib.request
 import urllib.error
+import urllib.parse
 import webbrowser
 
 # Bind to PySide6 (LGPL), never PyQt6 (GPL). Set before webview imports Qt so
@@ -53,7 +54,21 @@ APP_VERSION = "1.5.0"
 # private (pre-release), which the check treats as "no update" and stays quiet.
 GITHUB_OWNER = "JDE-Projects"
 GITHUB_REPO = "Simple-RCON-Tool"
-JDE_PROJECTS_URL = "https://github.com/JDE-Projects"
+JDE_PROJECTS_URL = "https://jde-projects.com"
+ALLOWED_URL_HOST = "jde-projects.com"
+
+
+def _is_allowed_url(url):
+    """True only for a plain https address on the JDE-Projects website: no
+    other host, scheme, port, login part, or whitespace/control characters."""
+    if not isinstance(url, str) or any(c.isspace() or ord(c) < 32 for c in url):
+        return False
+    try:
+        parts = urllib.parse.urlsplit(url)
+    except ValueError:
+        return False
+    # Comparing the whole netloc rules out ports and user@host tricks.
+    return parts.scheme == "https" and parts.netloc == ALLOWED_URL_HOST
 
 
 # ----------------------------------------------------------------------------
@@ -1111,8 +1126,10 @@ class Api:
         self._emit("log", {"serverId": server_id, "text": text, "level": level})
 
     def open_url(self, url):
-        """Open the approved project URL in the user's default browser."""
-        if url != JDE_PROJECTS_URL:
+        """Open a JDE-Projects website page in the user's default browser.
+        Any other address is refused (see _is_allowed_url)."""
+        if not _is_allowed_url(url):
+            debug_log("open_url refused an address outside the allowed site")
             return {"ok": False, "error": "URL is not allowed."}
         try:
             if webbrowser.open(url):
