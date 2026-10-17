@@ -1,4 +1,7 @@
 import json
+import socket
+
+import pytest
 
 import simple_rcon_tool as app
 
@@ -19,6 +22,50 @@ def test_catalog_contains_only_unique_source_rcon_games():
         assert {"key", "name", "protocol", "buttons"}.issubset(game)
         assert game["protocol"] == "source"
         assert isinstance(game["buttons"], list)
+
+
+def test_stop_command_catalog_flags_only_the_five_stop_buttons():
+    assert {(game["key"], button["label"]) for game in app.GAME_CATALOG for button in game["buttons"]
+            if button.get("stops_server")} == {
+        ("ark_se", "Shutdown"),
+        ("ark_asa", "Shutdown"),
+        ("palworld", "Force Stop"),
+        ("minecraft", "Stop Server"),
+        ("pz", "Save & Quit"),
+    }
+
+
+@pytest.mark.parametrize(
+    ("game_key", "command", "expected"),
+    [
+        ("minecraft", "stop", True),
+        ("minecraft", "  STOP  ", True),
+        ("ark_se", "doexit", True),
+        ("ark_se", "Shutdown", False),
+        ("minecraft", "list", False),
+        ("palworld", "Shutdown 60 Restarting", False),
+        ("unknown", "stop", False),
+    ],
+)
+def test_is_stop_command_matches_stop_commands_by_text(game_key, command, expected):
+    assert app.is_stop_command(game_key, command) is expected
+
+
+@pytest.mark.parametrize(
+    ("reply", "error", "expected"),
+    [
+        (None, app.RconConnectionClosed("closed"), "expected_disconnect"),
+        (None, ConnectionResetError(), "expected_disconnect"),
+        (None, ConnectionAbortedError(), "expected_disconnect"),
+        (None, None, "no_reply"),
+        ("", None, "replied"),
+        ("reply", None, "replied"),
+        (None, app.RconError("failed"), "failed"),
+        (None, socket.timeout(), "failed"),
+    ],
+)
+def test_stop_outcome_classifies_replies_and_errors(reply, error, expected):
+    assert app.stop_outcome(reply, error) == expected
 
 
 def test_connect_rejects_saved_unsupported_game_before_password_check(monkeypatch, tmp_path):

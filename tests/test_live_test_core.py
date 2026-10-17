@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from simple_rcon_tool import CATALOG_BY_KEY
+from simple_rcon_tool import CATALOG_BY_KEY, RconConnectionClosed
 from tools.live_test import run
 from tools.live_test.core import (LiveTestError, classify_check, fill_command, listener_confirmed,
                                   mask_secrets, parse_appmanifest_build_id, parse_netstat,
@@ -120,6 +120,19 @@ def test_run_checks_records_no_reply_without_changing_grading(monkeypatch, tmp_p
     assert records[1]["actual"] == ""
     assert records[1]["no_reply"] is True
     assert records[1]["cleanup"] == {"command": "cleanup", "reply": "", "no_reply": True}
+
+
+def test_stop_check_records_app_outcome_without_changing_grading(monkeypatch, tmp_path):
+    records, _, _ = _checks(
+        monkeypatch,
+        tmp_path,
+        [{"label": "Stop", "command": "stop", "stop": True, "expect": {"disconnect": True}}],
+        reply=None,
+        error=RconConnectionClosed("Connection closed by server."),
+    )
+
+    assert records[0]["app_outcome"] == "expected_disconnect"
+    assert records[0]["status"] == "pass"
 
 
 def test_say_empty_reply_requires_log_evidence(monkeypatch, tmp_path):

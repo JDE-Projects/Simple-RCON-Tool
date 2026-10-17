@@ -308,6 +308,95 @@ def test_current_command_failure_logs_removes_closes_and_emits_idle(monkeypatch,
     assert events[-1] == ("status", {"serverId": "srv-one", "state": "idle"})
 
 
+@pytest.mark.parametrize(
+    ("result", "error", "expected_events", "kept"),
+    [
+        (
+            None,
+            app.RconConnectionClosed("Connection closed by server."),
+            [
+                ("status", {"serverId": "srv-one", "state": "running"}),
+                ("log", {"serverId": "srv-one", "text": "$ Stop Server", "level": "cmd"}),
+                ("log", {"serverId": "srv-one", "text": "Server closed the connection, as expected after a stop command.", "level": "muted"}),
+                ("log", {"serverId": "srv-one", "text": "Disconnected. Password cleared from memory.", "level": "muted"}),
+                ("status", {"serverId": "srv-one", "state": "idle"}),
+            ],
+            False,
+        ),
+        (
+            "Exiting...",
+            None,
+            [
+                ("status", {"serverId": "srv-one", "state": "running"}),
+                ("log", {"serverId": "srv-one", "text": "$ Stop Server", "level": "cmd"}),
+                ("log", {"serverId": "srv-one", "text": "Exiting...", "level": "out"}),
+                ("log", {"serverId": "srv-one", "text": "Stop command sent. Disconnected. Password cleared from memory.", "level": "muted"}),
+                ("status", {"serverId": "srv-one", "state": "idle"}),
+            ],
+            False,
+        ),
+        (
+            None,
+            None,
+            [
+                ("status", {"serverId": "srv-one", "state": "running"}),
+                ("log", {"serverId": "srv-one", "text": "$ Stop Server", "level": "cmd"}),
+                ("log", {"serverId": "srv-one", "text": "No response from server. The command may not have run.", "level": "warn"}),
+                ("status", {"serverId": "srv-one", "state": "connected"}),
+            ],
+            True,
+        ),
+        (
+            None,
+            app.RconError("command failed"),
+            [
+                ("status", {"serverId": "srv-one", "state": "running"}),
+                ("log", {"serverId": "srv-one", "text": "$ Stop Server", "level": "cmd"}),
+                ("log", {"serverId": "srv-one", "text": "command failed", "level": "err"}),
+                ("log", {"serverId": "srv-one", "text": "Disconnected. Password cleared from memory.", "level": "muted"}),
+                ("status", {"serverId": "srv-one", "state": "idle"}),
+            ],
+            False,
+        ),
+    ],
+    ids=["expected_disconnect", "replied", "no_reply", "failed"],
+)
+def test_stop_command_outcomes_log_and_manage_session(monkeypatch, fake_session, result, error, expected_events, kept):
+    api = app.Api()
+    server = {**SERVER, "game": "minecraft"}
+    session = fake_session(server, "password")
+    session.command_result = result
+    session.command_error = error
+    api._sessions[SERVER["id"]] = session
+    events, debug, _debug_called = _record_events(api, monkeypatch)
+
+    api._exec(SERVER["id"], session, "stop", "Stop Server")
+
+    assert events == expected_events
+    assert (api._sessions == {SERVER["id"]: session}) is kept
+    assert session.closed is not kept
+    if isinstance(error, app.RconConnectionClosed):
+        assert debug == [
+            'send: quick button "Stop Server" (server srv-one)',
+            "command: RconConnectionClosed: Connection closed by server.",
+        ]
+
+
+def test_non_stop_connection_reset_still_logs_a_friendly_error(monkeypatch, fake_session):
+    api = app.Api()
+    session = fake_session(SERVER, "password")
+    session.command_error = ConnectionResetError()
+    api._sessions[SERVER["id"]] = session
+    events, _debug, _debug_called = _record_events(api, monkeypatch)
+
+    api._exec(SERVER["id"], session, "status", "Status")
+
+    assert ("log", {
+        "serverId": "srv-one", "text": "Network error. Check the host and your connection.", "level": "err",
+    }) in events
+    assert events[-1] == ("status", {"serverId": "srv-one", "state": "idle"})
+
+
 def test_no_reply_warns_and_keeps_session_connected(monkeypatch, fake_session):
     api = app.Api()
     session = fake_session(SERVER, "password")
