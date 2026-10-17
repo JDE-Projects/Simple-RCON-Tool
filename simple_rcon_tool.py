@@ -42,6 +42,8 @@ os.environ.setdefault("QT_API", "pyside6")
 
 import webview
 
+from debug_log import DebugLog
+
 
 # ----------------------------------------------------------------------------
 # Version & update source
@@ -297,45 +299,49 @@ def _restore_geometry(win) -> None:
 # ----------------------------------------------------------------------------
 # Optional debug log (off by default)
 # ----------------------------------------------------------------------------
-# One in-app toggle, off by default. When on, it writes one file per run,
-# Debug_Log_MMDDYYYY_HHMMSS.txt next to the exe. Credentials are never passed
-# to the log by construction (the RCON password lives only in the AUTH packet,
-# which is not logged); a guard still scrubs any "password" token just in case.
+# One in-app toggle, off by default. When on, it writes
+# Debug_Log_MMDDYYYY_HHMMSS.txt next to the exe through debug_log.DebugLog:
+# 5 MiB per file, the active file plus at most three older ones, 20 MiB total.
+# Pruning runs at launch, when logging starts, and at rollover, and deletes only
+# files with that exact name pattern. A failed write turns logging off and the
+# warning is shown in the console. Command text and user-typed labels are never
+# written; _redact still hides any password-like value as a second guard.
 # When off, nothing is written. Gitignore pattern: Debug_Log_*.txt.
 
-_debug_enabled = False
-_debug_path = None
-_debug_lock = threading.Lock()
-_SECRET_RE = re.compile(r'(password["\']?\s*[:=]\s*)(\S+)', re.IGNORECASE)
+_SECRET_RE = re.compile(
+    r'((?:["\']?)[\w-]*password[\w-]*(?:["\']?)\s*(?::|=|\s)\s*)'
+    r'("[^"]*"|\'[^\']*\'|\S+)',
+    re.IGNORECASE,
+)
 
 
 def _redact(text):
     return _SECRET_RE.sub(r"\1***", str(text))
 
 
+_debug_warning_api = None
+
+
+def _debug_warning(message):
+    if _debug_warning_api is not None:
+        _debug_warning_api._handle_debug_warning(message)
+
+
+_debug_logger = DebugLog(
+    app_dir(), "Simple RCON Tool", redact=_redact, on_warning=_debug_warning,
+)
+
+
 def set_debug(enabled):
     """Turn the debug log on or off. Returns the active state."""
-    global _debug_enabled
-    _debug_enabled = bool(enabled)
-    if _debug_enabled:
+    _debug_logger.set_enabled(enabled)
+    if _debug_logger.is_enabled():
         debug_log(f"Debug log enabled. Simple RCON Tool v{APP_VERSION}.")
-    return _debug_enabled
+    return _debug_logger.is_enabled()
 
 
 def debug_log(msg):
-    if not _debug_enabled:
-        return
-    global _debug_path
-    try:
-        with _debug_lock:
-            if _debug_path is None:
-                stamp = time.strftime("%m%d%Y_%H%M%S")
-                _debug_path = os.path.join(app_dir(), f"Debug_Log_{stamp}.txt")
-            line = time.strftime("%H:%M:%S") + "  " + _redact(msg) + "\n"
-            with open(_debug_path, "a", encoding="utf-8") as f:
-                f.write(line)
-    except Exception:
-        pass  # logging must never crash the app
+    _debug_logger.log(msg)
 
 
 # ----------------------------------------------------------------------------
@@ -1098,11 +1104,15 @@ def _update_error_reason(exc: BaseException) -> str:
 
 class Api:
     def __init__(self):
+        global _debug_warning_api
         self._sessions = {}  # server_id -> Session
         self._sessions_lock = threading.Lock()
         self._connect_attempts = {}  # server_id -> current connection attempt token
         self._window = None
         self._frontend_ready = False
+        self._debug_warnings = []
+        self._debug_warnings_lock = threading.Lock()
+        _debug_warning_api = self
 
     # ---- frontend helpers -------------------------------------------------
 
@@ -1111,6 +1121,24 @@ class Api:
 
     def _mark_frontend_ready(self):
         self._frontend_ready = True
+        with self._debug_warnings_lock:
+            warnings = self._debug_warnings
+            self._debug_warnings = []
+        for message in warnings:
+            self._emit("debugWarning", {
+                "text": message,
+                "debug": _debug_logger.is_enabled(),
+            })
+
+    def _handle_debug_warning(self, message):
+        with self._debug_warnings_lock:
+            if not self._frontend_ready or not self._window:
+                self._debug_warnings.append(message)
+                return
+        self._emit("debugWarning", {
+            "text": message,
+            "debug": _debug_logger.is_enabled(),
+        })
 
     def _emit(self, channel, payload):
         if not self._window or not self._frontend_ready:
@@ -1148,12 +1176,16 @@ class Api:
         except ServerStoreError as exc:
             servers = []
             warning = str(exc)
+        with self._debug_warnings_lock:
+            debug_warnings = self._debug_warnings
+            self._debug_warnings = []
         return {
             "servers": servers,
             "catalog": GAME_CATALOG,
             "version": APP_VERSION,
-            "debug": _debug_enabled,
+            "debug": _debug_logger.is_enabled(),
             "storeWarning": warning,
+            "debugWarnings": debug_warnings,
         }
 
     # ---- theme persistence --------------------------------------------------
@@ -1377,7 +1409,12 @@ class Api:
             return
         self._emit("status", {"serverId": server_id, "state": "running"})
         self._log(server_id, f"$ {label}", "cmd")
-        debug_log(f"send: {label}")
+        game_key = getattr(sess, "server", {}).get("game")
+        game = CATALOG_BY_KEY.get(game_key)
+        if game and any(button["label"] == label for button in game["buttons"]):
+            debug_log(f'send: quick button "{label}" (server {server_id})')
+        else:
+            debug_log(f"send: custom command (server {server_id}, {len(command)} characters)")
 
         try:
             resp = sess.command(command)
@@ -1554,6 +1591,7 @@ def main():
             pass
 
     api = Api()
+    _debug_logger.prune()
     html_path = resource_path("simple_rcon_tool-UI.html")
     window = webview.create_window(
         "Simple RCON Tool",

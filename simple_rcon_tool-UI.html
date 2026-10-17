@@ -617,6 +617,9 @@
       addLine(payload.text, payload.level, s ? s.name : null, payload.serverId);
     } else if (channel === 'status') {
       setStatus(payload.serverId, payload.state);
+    } else if (channel === 'debugWarning') {
+      addLine(payload.text, 'err');
+      $('dbgToggle').checked = !!payload.debug;
     }
   };
 
@@ -1043,6 +1046,10 @@
       populateGameSelect();
       render();
       if (cfg.storeWarning) addLine(cfg.storeWarning, 'err');
+      (cfg.debugWarnings || []).forEach(message => {
+        addLine(message, 'err');
+        $('dbgToggle').checked = !!cfg.debug;
+      });
 
       // quiet startup update check; only show if an update is available
       try {
