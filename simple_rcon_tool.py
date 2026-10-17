@@ -1058,10 +1058,7 @@ def _update_error_reason(exc: BaseException) -> str:
     if is_url_error:
         return "Couldn't reach GitHub. Check the internet connection."
 
-    text = f"{type(exc).__name__}: {exc}"
-    if len(text) > 120:
-        text = text[:117] + "..."
-    return text
+    return "Something unexpected went wrong while checking for updates."
 
 
 # ----------------------------------------------------------------------------
@@ -1131,7 +1128,11 @@ class Api:
         prefs["theme"] = theme
         if save_prefs(prefs):
             return {"ok": True}
-        return {"ok": False}
+        debug_log("save_theme write failed")
+        return {
+            "ok": False,
+            "error": "Couldn't save the theme choice. It will stay until you close the app.",
+        }
 
     # ---- debug log toggle -------------------------------------------------
 
@@ -1308,14 +1309,21 @@ class Api:
         safe = (server_name or "RCON").replace(" ", "_")
         safe = re.sub(r'[\\/:*?"<>|]', "", safe)
         stamp = time.strftime("%Y-%m-%d_%H-%M-%S")
-        fname = f"{safe}_Console_{stamp}.txt"
-        path = os.path.join(app_dir(), fname)
+        base = f"{safe}_Console_{stamp}"
         try:
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(text or "")
-            return {"ok": True, "path": path, "name": fname}
+            for suffix in range(1, 100):
+                fname = f"{base}.txt" if suffix == 1 else f"{base}_{suffix}.txt"
+                path = os.path.join(app_dir(), fname)
+                try:
+                    with open(path, "x", encoding="utf-8") as f:
+                        f.write(text or "")
+                    return {"ok": True, "path": path, "name": fname}
+                except FileExistsError:
+                    if suffix == 99:
+                        raise
         except Exception as e:
-            return {"ok": False, "error": str(e)}
+            debug_log(f"Could not export console: {type(e).__name__}: {e}")
+            return {"ok": False, "error": "The console could not be saved to a file."}
 
 
 # ----------------------------------------------------------------------------

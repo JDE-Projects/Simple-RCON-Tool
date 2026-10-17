@@ -115,12 +115,13 @@ def test_reason_for_plain_url_error_fallback():
 
 def test_reason_for_generic_fallback():
     exc = ValueError("something else entirely broke")
-    assert _update_error_reason(exc) == "ValueError: something else entirely broke"
+    reason = _update_error_reason(exc)
+    assert reason == "Something unexpected went wrong while checking for updates."
+    assert "something else entirely broke" not in reason
 
 
-def test_reason_for_generic_fallback_truncates_long_messages():
+def test_reason_for_generic_fallback_hides_long_messages():
     exc = ValueError("x" * 200)
     reason = _update_error_reason(exc)
-    assert len(reason) == 120
-    assert reason.endswith("...")
-    assert reason.startswith("ValueError: ")
+    assert reason == "Something unexpected went wrong while checking for updates."
+    assert str(exc) not in reason
