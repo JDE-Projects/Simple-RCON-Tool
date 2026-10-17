@@ -705,7 +705,12 @@
     card.querySelector('[data-del]').onclick = () => {
       askConfirm('Delete server?', `Remove “${srv.name}” from the list?`, async () => {
         const r = await api().delete_server(id);
-        SERVERS = r.servers; render();
+        if (r.ok) {
+          SERVERS = r.servers; render();
+        } else {
+          addLine(r.error, 'err');
+        }
+        if (r.warning) addLine(r.warning, 'err');
       });
     };
 
@@ -723,6 +728,7 @@
         } else {
           addLine(r.error, 'err', srv.name, srv.id);
         }
+        if (r.warning) addLine(r.warning, 'err');
       };
       card.querySelector('[data-pw]').addEventListener('keydown', e => {
         if (e.key === 'Enter') connectBtn.click();
@@ -880,6 +886,7 @@
 
     const server = { id: $('fId').value || null, game, name, host, port, buttons };
     const r = await api().save_server(server);
+    if (r.warning) addLine(r.warning, 'err');
     if (!r.ok) { $('modalErr').textContent = r.error || 'Save failed.'; return; }
     SERVERS = r.servers; render(); closeEditor();
   };

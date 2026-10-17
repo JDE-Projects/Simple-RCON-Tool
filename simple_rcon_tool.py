@@ -876,6 +876,20 @@ def _set_server_store_warning(message):
     _server_store_warning = message
 
 
+def _take_server_store_warning():
+    global _server_store_warning
+    warning = _server_store_warning
+    _server_store_warning = None
+    return warning
+
+
+def _with_warning(result, warning):
+    """Attach a pending storage warning to an API result, if there is one."""
+    if warning:
+        result["warning"] = warning
+    return result
+
+
 def _set_aside_unreadable_servers():
     """Rename an unusable servers file aside and start with an empty list."""
     backup_path = _backup_path(SERVERS_FILE)
@@ -1085,14 +1099,12 @@ class Api:
     # ---- config -----------------------------------------------------------
 
     def get_config(self):
-        global _server_store_warning
         try:
             servers = load_servers()
-            warning = _server_store_warning
+            warning = _take_server_store_warning()
         except ServerStoreError as exc:
             servers = []
             warning = str(exc)
-        _server_store_warning = None
         return {
             "servers": servers,
             "catalog": GAME_CATALOG,
@@ -1165,6 +1177,7 @@ class Api:
             servers = load_servers()
         except ServerStoreError as exc:
             return {"ok": False, "error": str(exc)}
+        warning = _take_server_store_warning()
         if server.get("id"):
             for i, s in enumerate(servers):
                 if s["id"] == server["id"]:
@@ -1175,17 +1188,28 @@ class Api:
         else:
             server["id"] = "srv" + str(int(threading.get_ident()))[:6] + str(len(servers))
             servers.append(server)
-        save_servers(servers)
-        return {"ok": True, "servers": servers}
+        if not save_servers(servers):
+            debug_log(f"save_server write failed: {server['id']}")
+            return _with_warning({
+                "ok": False,
+                "error": "The server could not be saved. Your saved list was not changed.",
+            }, warning)
+        return _with_warning({"ok": True, "servers": servers}, warning)
 
     def delete_server(self, server_id):
         try:
             servers = [s for s in load_servers() if s["id"] != server_id]
         except ServerStoreError as exc:
             return {"ok": False, "error": str(exc)}
-        save_servers(servers)
+        warning = _take_server_store_warning()
+        if not save_servers(servers):
+            debug_log(f"delete_server write failed: {server_id}")
+            return _with_warning({
+                "ok": False,
+                "error": "The server could not be deleted. Your saved list was not changed.",
+            }, warning)
         self.disconnect(server_id)
-        return {"ok": True, "servers": servers}
+        return _with_warning({"ok": True, "servers": servers}, warning)
 
     # ---- connection -------------------------------------------------------
 
@@ -1194,16 +1218,17 @@ class Api:
             server = next((s for s in load_servers() if s["id"] == server_id), None)
         except ServerStoreError as exc:
             return {"ok": False, "error": str(exc)}
+        warning = _take_server_store_warning()
         if not server:
-            return {"ok": False, "error": "Server not found."}
+            return _with_warning({"ok": False, "error": "Server not found."}, warning)
 
         if server.get("game") not in CATALOG_BY_KEY:
-            return {"ok": False, "error":
-                    "This server's game is no longer supported. Edit the server to pick another "
-                    "game, or delete it."}
+            return _with_warning({"ok": False, "error":
+                                  "This server's game is no longer supported. Edit the server to "
+                                  "pick another game, or delete it."}, warning)
 
         if not password:
-            return {"ok": False, "error": "RCON password is required."}
+            return _with_warning({"ok": False, "error": "RCON password is required."}, warning)
 
         if server_id in self.sessions:
             self.disconnect(server_id)
@@ -1212,12 +1237,12 @@ class Api:
         try:
             sess.connect()
         except Exception as e:
-            return {"ok": False, "error": friendly_error(e, "connect")}
+            return _with_warning({"ok": False, "error": friendly_error(e, "connect")}, warning)
 
         self.sessions[server_id] = sess
         self._log(server_id, f"Connected to {server['host']}:{server['port']}.", "ok")
         debug_log(f"Connected: {server.get('game')} {server['host']}:{server['port']}")
-        return {"ok": True}
+        return _with_warning({"ok": True}, warning)
 
     def disconnect(self, server_id):
         sess = self.sessions.pop(server_id, None)
