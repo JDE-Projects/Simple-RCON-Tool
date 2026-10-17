@@ -62,7 +62,7 @@ export default async function smoke(helpers) {
   await type("#fHost", "192.0.2.10");
   await type("#fPort", "not a port");
   await click("#saveBtn");
-  const portErrShown = await waitFor("document.getElementById('modalErr').textContent === 'Port must be a number.'", 5000)
+  const portErrShown = await waitFor("document.getElementById('modalErr').textContent === 'Port must be a number from 1 to 65535.'", 5000)
     .then(() => true).catch(() => false);
   check("a non-number port is refused by Python", portErrShown, await text("#modalErr"));
   const cfgAfterBadPort = await evaluate("api().get_config()");
