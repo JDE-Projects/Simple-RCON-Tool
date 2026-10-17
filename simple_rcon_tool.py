@@ -23,6 +23,7 @@ import time
 import errno
 import ctypes
 import shutil
+import tempfile
 import uuid
 from ctypes import wintypes
 import socket
@@ -93,23 +94,84 @@ def _pref_path() -> str:
     return os.path.join(app_dir(), "simple_rcon_tool.pref")
 
 
+def _write_json_atomic(path, data, **dump_kwargs) -> bool:
+    """Write JSON data without changing the destination unless replacement succeeds."""
+    try:
+        contents = json.dumps(data, **dump_kwargs)
+    except Exception as exc:
+        debug_log(f"_write_json_atomic serialize failed: {type(exc).__name__}: {exc}")
+        return False
+
+    temp_path = None
+    file_handle = None
+    file_descriptor = None
+    step = "create"
+    try:
+        destination_folder = os.path.dirname(os.path.abspath(path))
+        destination_name = os.path.basename(path)
+        file_descriptor, temp_path = tempfile.mkstemp(
+            dir=destination_folder,
+            prefix=f".{destination_name}.",
+            suffix=".tmp",
+        )
+        step = "open"
+        file_handle = os.fdopen(file_descriptor, "w", encoding="utf-8")
+        file_descriptor = None
+        step = "write"
+        file_handle.write(contents)
+        step = "flush"
+        file_handle.flush()
+        step = "fsync"
+        os.fsync(file_handle.fileno())
+        step = "close"
+        file_handle.close()
+        file_handle = None
+        step = "replace"
+        os.replace(temp_path, path)
+        temp_path = None
+        return True
+    except Exception as exc:
+        debug_log(f"_write_json_atomic {step} failed: {type(exc).__name__}: {exc}")
+        return False
+    finally:
+        if file_handle is not None:
+            try:
+                file_handle.close()
+            except Exception as exc:
+                debug_log(f"_write_json_atomic cleanup close failed: {type(exc).__name__}: {exc}")
+        elif file_descriptor is not None:
+            try:
+                os.close(file_descriptor)
+            except Exception as exc:
+                debug_log(f"_write_json_atomic cleanup close failed: {type(exc).__name__}: {exc}")
+        if temp_path is not None:
+            try:
+                os.remove(temp_path)
+            except FileNotFoundError:
+                pass
+            except Exception as exc:
+                debug_log(f"_write_json_atomic cleanup remove failed: {type(exc).__name__}: {exc}")
+
+
 def load_prefs() -> dict:
-    """Load the full prefs dict. Tolerant of a missing or corrupt file."""
+    """Load prefs, setting aside unreadable JSON or non-dict data and returning {}."""
     try:
         with open(_pref_path(), "r", encoding="utf-8") as f:
             data = json.load(f)
-        return data if isinstance(data, dict) else {}
-    except Exception:
+    except FileNotFoundError:
         return {}
+    except OSError as exc:
+        debug_log(f"load_prefs read failed: {type(exc).__name__}: {exc}")
+        return {}
+    except (ValueError, RecursionError) as exc:
+        return _set_aside_unreadable_prefs(f"{type(exc).__name__}: {exc}")
+    if isinstance(data, dict):
+        return data
+    return _set_aside_unreadable_prefs(f"{type(data).__name__}: expected dict")
 
 
 def save_prefs(prefs: dict) -> bool:
-    try:
-        with open(_pref_path(), "w", encoding="utf-8") as f:
-            json.dump(prefs, f)
-        return True
-    except Exception:
-        return False
+    return _write_json_atomic(_pref_path(), prefs)
 
 
 def _win32():
@@ -798,9 +860,9 @@ def _validate_server(record, *, require_catalog_game):
     return cleaned
 
 
-def _server_backup_path():
+def _backup_path(path):
     stamp = time.strftime("%Y%m%d-%H%M%S")
-    base = f"{SERVERS_FILE}.bad-{stamp}"
+    base = f"{path}.bad-{stamp}"
     candidate = base
     suffix = 2
     while os.path.exists(candidate):
@@ -816,7 +878,7 @@ def _set_server_store_warning(message):
 
 def _set_aside_unreadable_servers():
     """Rename an unusable servers file aside and start with an empty list."""
-    backup_path = _server_backup_path()
+    backup_path = _backup_path(SERVERS_FILE)
     try:
         os.rename(SERVERS_FILE, backup_path)
     except OSError as exc:
@@ -828,6 +890,18 @@ def _set_aside_unreadable_servers():
         "and the list starts empty."
     )
     return []
+
+
+def _set_aside_unreadable_prefs(reason):
+    backup_path = _backup_path(_pref_path())
+    try:
+        os.rename(_pref_path(), backup_path)
+    except OSError as exc:
+        debug_log(f"load_prefs unreadable data left in place: {reason}")
+        debug_log(f"load_prefs backup rename failed: {type(exc).__name__}: {exc}")
+    else:
+        debug_log(f"load_prefs set aside unreadable data: {reason}")
+    return {}
 
 
 def load_servers():
@@ -868,7 +942,7 @@ def load_servers():
     if not skipped and not repaired_ids:
         return servers
 
-    backup_path = _server_backup_path()
+    backup_path = _backup_path(SERVERS_FILE)
     try:
         shutil.copy2(SERVERS_FILE, backup_path)
     except OSError as exc:
@@ -898,12 +972,7 @@ def load_servers():
 
 
 def save_servers(servers):
-    try:
-        with open(SERVERS_FILE, "w", encoding="utf-8") as f:
-            json.dump(servers, f, indent=2)
-        return True
-    except Exception:
-        return False
+    return _write_json_atomic(SERVERS_FILE, servers, indent=2)
 
 
 def _update_error_reason(exc: BaseException) -> str:
