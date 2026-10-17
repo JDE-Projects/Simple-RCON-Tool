@@ -777,7 +777,11 @@ class Session:
         self.lock = threading.Lock()  # one command at a time per socket
 
     def connect(self):
-        self.client.connect()
+        try:
+            self.client.connect()
+        except Exception:
+            self.close()
+            raise
 
     def command(self, cmd):
         with self.lock:
@@ -1068,6 +1072,8 @@ def _update_error_reason(exc: BaseException) -> str:
 class Api:
     def __init__(self):
         self.sessions = {}  # server_id -> Session
+        self._sessions_lock = threading.Lock()
+        self._connect_attempts = {}  # server_id -> current connection attempt token
         self.window = None
         self.frontend_ready = False
 
@@ -1219,39 +1225,86 @@ class Api:
 
     # ---- connection -------------------------------------------------------
 
+    def _finish_connect_attempt(self, server_id, attempt):
+        """Clear an attempt token without disturbing a newer attempt."""
+        with self._sessions_lock:
+            if self._connect_attempts.get(server_id) is attempt:
+                self._connect_attempts.pop(server_id, None)
+
+    def _pop_session_if_current(self, server_id, sess):
+        """Detach *sess* only when it is still this server's live session."""
+        with self._sessions_lock:
+            if self.sessions.get(server_id) is sess:
+                return self.sessions.pop(server_id)
+        return None
+
+    def _session_is_current(self, server_id, sess):
+        with self._sessions_lock:
+            return self.sessions.get(server_id) is sess
+
     def connect(self, server_id, password):
+        attempt = object()
+        with self._sessions_lock:
+            self._connect_attempts[server_id] = attempt
         try:
             server = next((s for s in load_servers() if s["id"] == server_id), None)
         except ServerStoreError as exc:
+            self._finish_connect_attempt(server_id, attempt)
             return {"ok": False, "error": str(exc)}
         warning = _take_server_store_warning()
         if not server:
+            self._finish_connect_attempt(server_id, attempt)
             return _with_warning({"ok": False, "error": "Server not found."}, warning)
 
         if server.get("game") not in CATALOG_BY_KEY:
+            self._finish_connect_attempt(server_id, attempt)
             return _with_warning({"ok": False, "error":
                                   "This server's game is no longer supported. Edit the server to "
                                   "pick another game, or delete it."}, warning)
 
         if not password:
+            self._finish_connect_attempt(server_id, attempt)
             return _with_warning({"ok": False, "error": "RCON password is required."}, warning)
 
-        if server_id in self.sessions:
-            self.disconnect(server_id)
+        with self._sessions_lock:
+            if self._connect_attempts.get(server_id) is not attempt:
+                cancelled = True
+                old_session = None
+            else:
+                cancelled = False
+                old_session = self.sessions.pop(server_id, None)
+        if cancelled:
+            return _with_warning({"ok": False, "error": "Connection was cancelled."}, warning)
+        if old_session:
+            old_session.close()
+            self._log(server_id, "Disconnected. Password cleared from memory.", "muted")
+            self._emit("status", {"serverId": server_id, "state": "idle"})
 
         sess = Session(server, password)
         try:
             sess.connect()
         except Exception as e:
+            self._finish_connect_attempt(server_id, attempt)
             return _with_warning({"ok": False, "error": friendly_error(e, "connect")}, warning)
 
-        self.sessions[server_id] = sess
+        with self._sessions_lock:
+            if self._connect_attempts.get(server_id) is attempt:
+                self.sessions[server_id] = sess
+                self._connect_attempts.pop(server_id, None)
+                installed = True
+            else:
+                installed = False
+        if not installed:
+            sess.close()
+            return _with_warning({"ok": False, "error": "Connection was cancelled."}, warning)
         self._log(server_id, f"Connected to {server['host']}:{server['port']}.", "ok")
         debug_log(f"Connected: {server.get('game')} {server['host']}:{server['port']}")
         return _with_warning({"ok": True}, warning)
 
     def disconnect(self, server_id):
-        sess = self.sessions.pop(server_id, None)
+        with self._sessions_lock:
+            self._connect_attempts.pop(server_id, None)
+            sess = self.sessions.pop(server_id, None)
         if sess:
             sess.close()
             self._log(server_id, "Disconnected. Password cleared from memory.", "muted")
@@ -1259,14 +1312,21 @@ class Api:
         return {"ok": True}
 
     def disconnect_all(self):
-        for server_id in list(self.sessions.keys()):
-            self.disconnect(server_id)
+        with self._sessions_lock:
+            self._connect_attempts.clear()
+            sessions = list(self.sessions.items())
+            self.sessions.clear()
+        for server_id, sess in sessions:
+            sess.close()
+            self._log(server_id, "Disconnected. Password cleared from memory.", "muted")
+            self._emit("status", {"serverId": server_id, "state": "idle"})
         return {"ok": True}
 
     # ---- sending commands -------------------------------------------------
 
     def send(self, server_id, command, label=None):
-        sess = self.sessions.get(server_id)
+        with self._sessions_lock:
+            sess = self.sessions.get(server_id)
         if not sess:
             return {"ok": False, "error": "Not connected."}
         command = (command or "").strip()
@@ -1274,34 +1334,48 @@ class Api:
             return {"ok": False, "error": "Empty command."}
         threading.Thread(
             target=self._exec,
-            args=(server_id, command, label or command),
+            args=(server_id, sess, command, label or command),
             daemon=True,
         ).start()
         return {"ok": True}
 
-    def _exec(self, server_id, command, label):
-        sess = self.sessions.get(server_id)
-        if not sess:
-            self._log(server_id, "Not connected.", "err")
+    def _exec(self, server_id, sess, command, label):
+        if not self._session_is_current(server_id, sess):
+            debug_log(f"Command skipped for replaced or closed session: {server_id}")
             return
         self._emit("status", {"serverId": server_id, "state": "running"})
         self._log(server_id, f"$ {label}", "cmd")
         debug_log(f"send: {label}")
-        ok = True
+
         try:
             resp = sess.command(command)
+        except Exception as e:
+            error = e
+            resp = None
+        else:
+            error = None
+
+        if not self._session_is_current(server_id, sess):
+            if error is not None:
+                sess.close()
+            debug_log(f"Command outcome from replaced or closed session: {server_id}")
+            return
+
+        if error is None:
             if resp:
                 for line in resp.splitlines():
                     self._log(server_id, line, "out")
             else:
                 self._log(server_id, "(no output)", "muted")
-        except Exception as e:
-            ok = False
-            self._log(server_id, friendly_error(e, "command"), "err")
-            self.disconnect(server_id)
-        finally:
-            if ok:
-                self._emit("status", {"serverId": server_id, "state": "connected"})
+            self._emit("status", {"serverId": server_id, "state": "connected"})
+            return
+
+        self._log(server_id, friendly_error(error, "command"), "err")
+        failed_session = self._pop_session_if_current(server_id, sess)
+        if failed_session:
+            failed_session.close()
+            self._log(server_id, "Disconnected. Password cleared from memory.", "muted")
+            self._emit("status", {"serverId": server_id, "state": "idle"})
 
     # ---- export -----------------------------------------------------------
 
