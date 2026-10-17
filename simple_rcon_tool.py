@@ -902,7 +902,7 @@ def _set_aside_unreadable_servers():
         os.rename(SERVERS_FILE, backup_path)
     except OSError as exc:
         debug_log(f"load_servers backup rename failed: {type(exc).__name__}: {exc}")
-        raise ServerStoreError("Your saved server list could not be recovered. It was left unchanged.")
+        raise ServerStoreError("Your saved server list could not be recovered. It was left unchanged.") from exc
     backup_name = os.path.basename(backup_path)
     _set_server_store_warning(
         f"Your saved server list could not be read, so it was set aside as {backup_name} "
@@ -931,7 +931,7 @@ def load_servers():
         return []
     except OSError as exc:
         debug_log(f"load_servers read failed: {type(exc).__name__}: {exc}")
-        raise ServerStoreError("Your saved server list could not be read. It was left unchanged.")
+        raise ServerStoreError("Your saved server list could not be read. It was left unchanged.") from exc
     except (ValueError, RecursionError) as exc:
         # JSONDecodeError and UnicodeDecodeError are both ValueError subclasses.
         debug_log(f"load_servers decode failed: {type(exc).__name__}: {exc}")
@@ -966,7 +966,7 @@ def load_servers():
         shutil.copy2(SERVERS_FILE, backup_path)
     except OSError as exc:
         debug_log(f"load_servers backup copy failed: {type(exc).__name__}: {exc}")
-        raise ServerStoreError("Your saved server list could not be preserved. It was left unchanged.")
+        raise ServerStoreError("Your saved server list could not be preserved. It was left unchanged.") from exc
 
     backup_name = os.path.basename(backup_path)
     cleanup_saved = save_servers(servers)
