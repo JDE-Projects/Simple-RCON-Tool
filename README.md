@@ -33,10 +33,9 @@ If you enjoyed this project and would like to buy me a coffee, check out my [Ko-
 
 Two ways to get it from the [Releases](../../releases) page - pick one:
 
-- **Installer (recommended):** download `SimpleRCONTool-vX.Y.Z-setup.exe` and run
-  it. Installs the app, adds a Start menu shortcut, and can be removed later from
-  Add or Remove Programs. Installs just for you by default (no admin); you can
-  choose all users during setup.
+- **Installer (recommended):** download `SimpleRCONTool-vX.Y.Z-setup.exe` and
+  run it. Installs the app, adds a Start menu shortcut, and can be removed later
+  from Add or Remove Programs. Installs just for you, no admin needed.
 - **Portable .zip:** download `SimpleRCONTool-vX.Y.Z.zip`, extract it, and run
   `Simple RCON Tool.exe` from inside the extracted folder. No install - good for a
   locked-down PC or a USB stick. Keep the folder together.
