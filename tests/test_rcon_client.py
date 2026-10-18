@@ -471,7 +471,7 @@ def test_oversized_packet_length_raises_invalid_packet_without_body(client_facto
         _recv_packet(conn)
         if sentinel:
             _recv_packet(conn)
-        conn.sendall(struct.pack("<i", 65537))
+        conn.sendall(struct.pack("<i", RconClient.MAX_PACKET_LENGTH + 1))
 
     client = client_factory(handler, sentinel=sentinel)
     with pytest.raises(RconError, match="invalid packet"):
@@ -540,6 +540,22 @@ def test_minimum_packet_length_with_single_null_is_accepted(client_factory, sent
 @pytest.mark.parametrize("sentinel", [True, False])
 def test_4096_byte_body_is_accepted(client_factory, sentinel):
     body = "x" * 4096
+
+    def handler(conn):
+        command_id, _, _ = _recv_packet(conn)
+        if sentinel:
+            sentinel_id, _, _ = _recv_packet(conn)
+        conn.sendall(_packet(command_id, RconClient.SERVERDATA_RESPONSE_VALUE, body))
+        if sentinel:
+            conn.sendall(_packet(sentinel_id, RconClient.SERVERDATA_RESPONSE_VALUE, ""))
+
+    client = client_factory(handler, sentinel=sentinel)
+    assert client.command("status") == body
+
+
+@pytest.mark.parametrize("sentinel", [True, False])
+def test_single_large_packet_like_cs2_cvarlist_is_accepted(client_factory, sentinel):
+    body = "x" * 358_500
 
     def handler(conn):
         command_id, _, _ = _recv_packet(conn)

@@ -676,9 +676,10 @@ class RconClient:
     SERVERDATA_AUTH_RESPONSE = 2
     SERVERDATA_EXECCOMMAND = 2
     SERVERDATA_RESPONSE_VALUE = 0
-    # 9 is ID + type + one null terminator; 65536 is far above Minecraft's 4096-byte replies and stops absurd waits.
+    # 9 is ID + type + one null terminator. CS2 sends cvarlist as one packet of about 350 KB;
+    # 4 MiB leaves room for that and still stops absurd waits.
     MIN_PACKET_LENGTH = 9
-    MAX_PACKET_LENGTH = 65536
+    MAX_PACKET_LENGTH = 4 * 1024 * 1024
 
     def __init__(
         self, host, port, password, timeout=8, *, sentinel=True, reply_ids_lag=False,
