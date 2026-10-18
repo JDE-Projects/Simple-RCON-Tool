@@ -20,6 +20,7 @@ dist/
 # Python cache
 __pycache__/
 .pytest_cache/
+.ruff_cache/
 *.pyc
 .venv/
 
