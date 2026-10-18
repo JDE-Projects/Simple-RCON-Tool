@@ -60,12 +60,19 @@ REM --noconfirm replaces the previous dist folder without asking.
   --add-data "simple_rcon_tool-UI.html;." ^
   --add-data "simple_rcon_tool.png;." ^
   --add-data "fonts;fonts" ^
+  --add-data "licenses;licenses" ^
   --collect-all PySide6 ^
   --collect-all qtpy ^
   --hidden-import truststore ^
   simple_rcon_tool.py
 if errorlevel 1 (
     echo ERROR: PyInstaller failed. See the messages above.
+    %PAUSE%
+    exit /b 1
+)
+"%VPY%" tools\trim_bundle.py "dist\Simple RCON Tool"
+if errorlevel 1 (
+    echo ERROR: Qt bundle trim failed or was refused. See the messages above.
     %PAUSE%
     exit /b 1
 )
