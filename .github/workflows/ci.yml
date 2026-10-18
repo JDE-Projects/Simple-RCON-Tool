@@ -5,8 +5,9 @@ on:
     branches: [main]
 jobs:
   ci:
-    uses: JDE-Projects/Build-Tools/.github/workflows/ci-windows.yml@61439c9623c5941cc53089bcbb0690bac91ec8e8 # Build-Tools main (ruff, import check, pytest)
+    uses: JDE-Projects/Build-Tools/.github/workflows/ci-windows.yml@61439c9623c5941cc53089bcbb0690bac91ec8e8 # Build-Tools main (ruff, import check, pytest, runtime lock check)
     permissions:
       contents: read
     with:
       entry_script: "simple_rcon_tool.py"
+      verify_runtime_lock: true

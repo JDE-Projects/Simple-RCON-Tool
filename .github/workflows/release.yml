@@ -5,7 +5,7 @@ on:
     tags: ['v*']
 jobs:
   release:
-    uses: JDE-Projects/Build-Tools/.github/workflows/release.yml@61439c9623c5941cc53089bcbb0690bac91ec8e8 # Build-Tools main (CI checks: ruff, import, pytest)
+    uses: JDE-Projects/Build-Tools/.github/workflows/release.yml@61439c9623c5941cc53089bcbb0690bac91ec8e8 # Build-Tools main (CI checks: ruff, import, pytest, runtime lock check)
     permissions:
       id-token: write
       attestations: write
@@ -17,3 +17,4 @@ jobs:
       build_command: "Build_Simple_RCON_Tool.bat"
       app_id: "bd83904f-6fac-414c-970a-7a9b2d5fb66e" # stable per-app installer GUID; generated once, never reuse or change
       entry_script: "simple_rcon_tool.py"
+      verify_runtime_lock: true
