@@ -568,11 +568,20 @@
   let confirmCb = null;
   let promptCb = null;
   const MAX_LINES = 1500;
+  const OPS = {};
 
   const $ = (id) => document.getElementById(id);
   const consoleEl = $('console');
 
   function api() { return window.pywebview.api; }
+  function bumpOp(serverId) {
+    OPS[serverId] = (OPS[serverId] || 0) + 1;
+    return OPS[serverId];
+  }
+  // render() replaces cards, so a late reply must look up the card shown now.
+  function liveCard(serverId) {
+    return document.querySelector(`[data-card="${serverId}"]`);
+  }
   async function openUrl(url) {
     try {
       const result = await api().open_url(url);
@@ -642,6 +651,7 @@
   // ---- render server cards ----
   function render() {
     const list = $('serverList');
+    const connected = new Set(Array.from(list.querySelectorAll('.card.connected')).map(card => card.dataset.card));
     list.innerHTML = '';
     if (!SERVERS.length) {
       list.innerHTML = '<div class="console-empty" style="margin-top:30px;">No servers yet. Click “Add Server”.</div>';
@@ -655,6 +665,7 @@
       const card = document.createElement('div');
       card.className = 'card';
       card.dataset.card = srv.id;
+      if (connected.has(String(srv.id))) card.classList.add('connected');
 
       const all = combinedButtons(srv);
       const quick = all.map((b, i) => {
@@ -726,16 +737,24 @@
       connectBtn.onclick = async () => {
         const pwEl = card.querySelector('[data-pw]');
         const pw = pwEl.value;
+        const op = bumpOp(id);
         connectBtn.disabled = true; connectBtn.textContent = 'Connecting…';
-        const r = await api().connect(id, pw);
-        connectBtn.disabled = false; connectBtn.textContent = 'Connect';
-        if (r.ok) {
-          pwEl.value = '';
-          card.classList.add('connected');
-        } else {
-          addLine(r.error, 'err', srv.name, srv.id);
+        try {
+          const r = await api().connect(id, pw);
+          if (r.warning) addLine(r.warning, 'err');
+          if (OPS[id] !== op) return;
+          if (r.ok) {
+            pwEl.value = '';
+            const shown = liveCard(id);
+            if (shown) shown.classList.add('connected');
+          } else {
+            addLine(r.error, 'err', srv.name, srv.id);
+          }
+        } catch (error) {
+          if (OPS[id] === op) addLine(error.message || String(error), 'err', srv.name, srv.id);
+        } finally {
+          connectBtn.disabled = false; connectBtn.textContent = 'Connect';
         }
-        if (r.warning) addLine(r.warning, 'err');
       };
       card.querySelector('[data-pw]').addEventListener('keydown', e => {
         if (e.key === 'Enter') connectBtn.click();
@@ -743,8 +762,14 @@
     }
 
     card.querySelector('[data-disconnect]').onclick = async () => {
-      await api().disconnect(id);
-      card.classList.remove('connected');
+      const op = bumpOp(id);
+      try {
+        await api().disconnect(id);
+        const shown = liveCard(id);
+        if (OPS[id] === op && shown) shown.classList.remove('connected');
+      } catch (error) {
+        if (OPS[id] === op) addLine(error.message || String(error), 'err', srv.name, srv.id);
+      }
     };
 
     // quick buttons (locked + custom, indexed into the combined array)
@@ -753,14 +778,19 @@
       b.onclick = () => {
         const btnDef = all[parseInt(b.dataset.qbtn, 10)];
         if (!btnDef) return;
-        const fire = (value) => {
+        const fire = async (value) => {
           let cmd = btnDef.command;
           if (cmd.includes('{arg}')) {
             let v = value == null ? '' : value;
             if (btnDef.argmode === 'underscore') v = v.replace(/ /g, '_');
             cmd = cmd.split('{arg}').join(v);
           }
-          api().send(id, cmd, btnDef.label);
+          try {
+            const r = await api().send(id, cmd, btnDef.label);
+            if (!r.ok) addLine(r.error, 'err', srv.name, srv.id);
+          } catch (error) {
+            addLine(error.message || String(error), 'err', srv.name, srv.id);
+          }
         };
         const go = () => {
           if (btnDef.command.includes('{arg}')) {
@@ -775,12 +805,20 @@
     });
 
     // custom command box
-    const runCustom = () => {
+    const runCustom = async () => {
       const input = card.querySelector('[data-custom]');
       const cmd = input.value;
       if (!cmd.trim()) return;
-      api().send(id, cmd, cmd.trim());
-      input.value = '';
+      try {
+        const r = await api().send(id, cmd, cmd.trim());
+        if (!r.ok) {
+          addLine(r.error, 'err', srv.name, srv.id);
+          return;
+        }
+        if (input.value === cmd) input.value = '';
+      } catch (error) {
+        addLine(error.message || String(error), 'err', srv.name, srv.id);
+      }
     };
     card.querySelector('[data-run]').onclick = runCustom;
     card.querySelector('[data-custom]').addEventListener('keydown', e => {
@@ -935,8 +973,18 @@
   // ---- top actions ----
   $('endAllBtn').onclick = () => {
     askConfirm('Disconnect all?', 'Disconnect every server and clear all passwords from memory.', async () => {
-      await api().disconnect_all();
-      document.querySelectorAll('.card').forEach(c => c.classList.remove('connected'));
+      const ops = {};
+      SERVERS.forEach(srv => ops[srv.id] = bumpOp(srv.id));
+      try {
+        await api().disconnect_all();
+      } catch (error) {
+        addLine(error.message || String(error), 'err');
+        return;
+      }
+      document.querySelectorAll('.card').forEach(card => {
+        const id = card.dataset.card;
+        if (OPS[id] === ops[id]) card.classList.remove('connected');
+      });
     });
   };
   $('clearBtn').onclick = () => {

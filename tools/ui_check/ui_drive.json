@@ -8,6 +8,10 @@
       "script": "tools/ui_check/smoke.js",
       "timeout_s": 120
     },
+    "session-sync": {
+      "script": "tools/ui_check/session_sync.js",
+      "timeout_s": 120
+    },
     "save-error": {
       "script": "tools/ui_check/save_error.js",
       "fixture": "tools/ui_check/save_error_fixture.py",
