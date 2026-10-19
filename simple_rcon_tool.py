@@ -36,7 +36,7 @@ from app.services import diagnostics, window
 # ----------------------------------------------------------------------------
 # APP_VERSION is the version of record; it equals the release tag without the
 # leading "v".
-APP_VERSION = "1.5.2"
+APP_VERSION = "1.5.3"
 
 
 # ----------------------------------------------------------------------------
