@@ -1748,6 +1748,9 @@ def _prompt_second_instance(app_title: str) -> bool:
         return True   # fail open: if the box can't be shown, launch proceeds
 
 def main():
+    # Stops Qt leaving an empty %LOCALAPPDATA%\<exe name>\cache\qtpipelinecache-*
+    # folder the uninstaller never removes. Must run before the window is created.
+    os.environ.setdefault("QT_DISABLE_SHADER_DISK_CACHE", "1")
     strip_remote_debugging(os.environ, sys.argv, getattr(sys, "frozen", False))
 
     # Use the Windows certificate store for TLS instead of the bundled CA list,
