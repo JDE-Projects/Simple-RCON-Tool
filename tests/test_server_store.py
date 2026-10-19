@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-import simple_rcon_tool as app
+from app.api import Api
 from app import paths
 from app.services import servers
 
@@ -176,12 +176,12 @@ def test_save_rejects_invalid_input_without_changing_file(server_file, changes):
     original = b'[{"id":"srv-existing","name":"Existing","host":"127.0.0.1","port":27015,"game":"cs2","buttons":[]}]'
     server_file.write_bytes(original)
 
-    assert app.Api().save_server(valid_server(**changes))["ok"] is False
+    assert Api("test").save_server(valid_server(**changes))["ok"] is False
     assert server_file.read_bytes() == original
 
 
 def test_save_converts_port_and_drops_password_and_extra_keys(server_file):
-    result = app.Api().save_server(valid_server(
+    result = Api("test").save_server(valid_server(
         id=None, port="27015", password="secret", extra="drop this",
     ))
 
@@ -201,7 +201,7 @@ def test_save_does_not_write_when_loading_raises_store_error(monkeypatch, server
 
     monkeypatch.setattr(servers, "load_servers", fail_load)
 
-    assert app.Api().save_server(valid_server(id=None)) == {
+    assert Api("test").save_server(valid_server(id=None)) == {
         "ok": False, "error": "Saved server list is unavailable.",
     }
     assert server_file.read_bytes() == original
@@ -214,7 +214,7 @@ def test_save_rejects_missing_required_fields_without_changing_file(server_file,
     record = valid_server()
     del record[field]
 
-    assert app.Api().save_server(record)["ok"] is False
+    assert Api("test").save_server(record)["ok"] is False
     assert server_file.read_bytes() == original
 
 
@@ -222,13 +222,13 @@ def test_save_rejects_non_record_without_changing_file(server_file):
     original = b"[]"
     server_file.write_bytes(original)
 
-    assert app.Api().save_server(None)["ok"] is False
+    assert Api("test").save_server(None)["ok"] is False
     assert server_file.read_bytes() == original
 
 
 def test_get_config_returns_warning_once(server_file):
     server_file.write_text("not json", encoding="utf-8")
-    api = app.Api()
+    api = Api("test")
 
     first = api.get_config()
     second = api.get_config()
@@ -251,7 +251,7 @@ def test_delete_and_connect_return_store_error_without_writing(monkeypatch, serv
 
     monkeypatch.setattr(servers, "load_servers", fail_load)
 
-    assert getattr(app.Api(), method)(*args) == {
+    assert getattr(Api("test"), method)(*args) == {
         "ok": False, "error": "Saved server list is unavailable.",
     }
     assert server_file.read_bytes() == original
@@ -299,7 +299,7 @@ def test_new_server_ids_pass_validation_and_differ():
 
 
 def test_add_after_deleting_a_middle_server_gets_a_fresh_id(server_file):
-    api = app.Api()
+    api = Api("test")
     ids = [api.save_server(new_server(name))["servers"][-1]["id"] for name in ("A", "B", "C")]
 
     api.delete_server(ids[1])
@@ -312,7 +312,7 @@ def test_add_after_deleting_a_middle_server_gets_a_fresh_id(server_file):
 
 
 def test_edit_after_add_after_delete_changes_only_the_target(server_file):
-    api = app.Api()
+    api = Api("test")
     ids = [api.save_server(new_server(name))["servers"][-1]["id"] for name in ("A", "B", "C")]
     api.delete_server(ids[1])
     new_id = api.save_server(new_server("D"))["servers"][-1]["id"]

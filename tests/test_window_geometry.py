@@ -1,3 +1,4 @@
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -86,7 +87,7 @@ def test_main_marks_second_instance_and_wires_geometry_suppression(monkeypatch):
     monkeypatch.setattr(app, "IS_SECOND_INSTANCE", False)
     monkeypatch.setattr(app, "_acquire_single_instance", lambda _name: False)
     monkeypatch.setattr(app, "_prompt_second_instance", lambda _title: True)
-    monkeypatch.setattr(app.threading, "Thread", lambda *args, **kwargs: SimpleNamespace(start=lambda: None))
+    monkeypatch.setattr(threading, "Thread", lambda *args, **kwargs: SimpleNamespace(start=lambda: None))
     monkeypatch.setattr(app.webview, "create_window", lambda *args, **kwargs: window)
     monkeypatch.setattr(app.webview, "start", lambda **kwargs: None)
     monkeypatch.setattr(window_service, "_restore_geometry", lambda _window, _second: pytest.fail("restore must be skipped"))

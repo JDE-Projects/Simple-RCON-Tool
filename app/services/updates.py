@@ -3,6 +3,9 @@ import json
 import socket
 import ssl
 import urllib.error
+import urllib.request
+
+from app.services import diagnostics
 
 
 # Update check hits this repo's GitHub Releases. Returns 404 while the repo is
@@ -97,3 +100,32 @@ def _update_error_reason(exc: BaseException) -> str:
         return "Couldn't reach GitHub. Check the internet connection."
 
     return "Something unexpected went wrong while checking for updates."
+
+
+def check_update(api):
+    """Compare the latest published release to the running version. Quiet in
+    the UI on failure (see _update_error_reason), but always logged when debug
+    is on."""
+    result = {"ok": True, "current": api._version, "version": None,
+              "update": False, "offline": False}
+    try:
+        url = (f"https://api.github.com/repos/{GITHUB_OWNER}/"
+               f"{GITHUB_REPO}/releases/latest")
+        req = urllib.request.Request(url, headers={
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "Simple-RCON-Tool",
+        })
+        with urllib.request.urlopen(req, timeout=10) as r:
+            data = json.loads(r.read().decode("utf-8"))
+        tag = (data.get("tag_name") or "").lstrip("v")
+        result["version"] = tag
+        if tag and _version_gt(tag, api._version):
+            result["update"] = True
+            result["url"] = (data.get("html_url") or
+                              f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}/releases")
+        diagnostics.debug_log(f"check_update: found v{tag}, current v{api._version}")
+    except Exception as e:
+        result["offline"] = True
+        result["reason"] = _update_error_reason(e)
+        diagnostics.debug_log(f"check_update failed: {type(e).__name__}: {e}")
+    return result

@@ -1,6 +1,6 @@
-import simple_rcon_tool as app
+from app.api import Api
 from app import paths
-from app.services import diagnostics, prefs
+from app.services import diagnostics, prefs, sessions
 
 
 THEME_ERROR = "Couldn't save the theme choice. It will stay until you close the app."
@@ -12,7 +12,7 @@ def test_save_theme_success(monkeypatch, tmp_path):
     monkeypatch.setattr(paths, "app_dir", lambda: str(tmp_path))
     monkeypatch.setattr(paths, "_pref_path", lambda: str(pref_path))
 
-    result = app.Api().save_theme("light")
+    result = Api("test").save_theme("light")
 
     assert result == {"ok": True}
     assert prefs.load_prefs() == {"theme": "light"}
@@ -25,7 +25,7 @@ def test_save_theme_failure_returns_error_and_logs(monkeypatch, tmp_path):
     monkeypatch.setattr(prefs, "save_prefs", lambda _prefs: False)
     monkeypatch.setattr(diagnostics, "debug_log", messages.append)
 
-    result = app.Api().save_theme("light")
+    result = Api("test").save_theme("light")
 
     assert result == {"ok": False, "error": THEME_ERROR}
     assert messages == ["save_theme write failed"]
@@ -33,9 +33,9 @@ def test_save_theme_failure_returns_error_and_logs(monkeypatch, tmp_path):
 
 def test_export_console_success_writes_text(monkeypatch, tmp_path):
     monkeypatch.setattr(paths, "app_dir", lambda: str(tmp_path))
-    monkeypatch.setattr(app.time, "strftime", lambda _format: "2026-10-17_12-00-00")
+    monkeypatch.setattr(sessions.time, "strftime", lambda _format: "2026-10-17_12-00-00")
 
-    result = app.Api().export_console("My Server", "console text")
+    result = Api("test").export_console("My Server", "console text")
 
     assert result["ok"] is True
     assert result["name"] == "My_Server_Console_2026-10-17_12-00-00.txt"
@@ -44,8 +44,8 @@ def test_export_console_success_writes_text(monkeypatch, tmp_path):
 
 def test_export_console_does_not_overwrite_same_second(monkeypatch, tmp_path):
     monkeypatch.setattr(paths, "app_dir", lambda: str(tmp_path))
-    monkeypatch.setattr(app.time, "strftime", lambda _format: "2026-10-17_12-00-00")
-    api = app.Api()
+    monkeypatch.setattr(sessions.time, "strftime", lambda _format: "2026-10-17_12-00-00")
+    api = Api("test")
 
     first = api.export_console("My Server", "first export")
     second = api.export_console("My Server", "second export")
@@ -67,7 +67,7 @@ def test_export_console_failure_returns_plain_error_and_logs(monkeypatch, tmp_pa
     monkeypatch.setattr("builtins.open", denied)
     monkeypatch.setattr(diagnostics, "debug_log", messages.append)
 
-    result = app.Api().export_console("My Server", "console text")
+    result = Api("test").export_console("My Server", "console text")
 
     assert result == {"ok": False, "error": EXPORT_ERROR}
     assert "secret" not in str(result)

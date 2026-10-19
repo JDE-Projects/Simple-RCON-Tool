@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-import simple_rcon_tool as app
+from app.api import Api
 from app import paths
 from app.services import servers
 
@@ -41,7 +41,7 @@ def test_save_failure_returns_error_and_leaves_file_unchanged(monkeypatch, serve
     original = server_file.read_bytes()
     monkeypatch.setattr(servers, "save_servers", lambda _servers: False)
 
-    result = app.Api().save_server(server(name="Renamed Server"))
+    result = Api("test").save_server(server(name="Renamed Server"))
 
     assert result == {"ok": False, "error": SAVE_ERROR}
     assert server_file.read_bytes() == original
@@ -50,7 +50,7 @@ def test_save_failure_returns_error_and_leaves_file_unchanged(monkeypatch, serve
 def test_delete_failure_returns_error_preserves_session_and_does_not_disconnect(monkeypatch, server_file):
     write_server(server_file)
     original = server_file.read_bytes()
-    api = app.Api()
+    api = Api("test")
     session = object()
     api._sessions["srv-one"] = session
     disconnected = []
@@ -67,7 +67,7 @@ def test_delete_failure_returns_error_preserves_session_and_does_not_disconnect(
 
 def test_delete_success_still_disconnects(server_file):
     write_server(server_file)
-    api = app.Api()
+    api = Api("test")
     session = object()
     api._sessions["srv-one"] = session
     disconnected = []
@@ -102,7 +102,7 @@ def test_operation_returns_pending_warning_once(monkeypatch, server_file, method
         return loaded
 
     monkeypatch.setattr(servers, "load_servers", load_with_warning)
-    result = getattr(app.Api(), method)(*args)
+    result = getattr(Api("test"), method)(*args)
 
     assert result["warning"] == warning
     assert servers._take_server_store_warning() is None
@@ -111,7 +111,7 @@ def test_operation_returns_pending_warning_once(monkeypatch, server_file, method
 def test_get_config_returns_warning_once(server_file):
     write_server(server_file)
     servers._set_server_store_warning("Saved server data needed attention.")
-    api = app.Api()
+    api = Api("test")
 
     assert api.get_config()["storeWarning"] == "Saved server data needed attention."
     assert api.get_config()["storeWarning"] is None

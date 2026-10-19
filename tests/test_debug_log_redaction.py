@@ -1,6 +1,7 @@
 import pytest
 
 import simple_rcon_tool as app
+from app.api import Api
 from app import debug_log
 from app.services import diagnostics
 
@@ -47,7 +48,7 @@ def _configured_logger(monkeypatch, tmp_path):
 
 def test_custom_command_text_and_label_never_enter_debug_log(monkeypatch, tmp_path):
     logger = _configured_logger(monkeypatch, tmp_path)
-    api = app.Api()
+    api = Api("test")
     session = FakeSession({"game": "gmod"})
     api._sessions["srv-one"] = session
     api._exec("srv-one", session, "rcon_password secret", "rcon_password secret")
@@ -59,7 +60,7 @@ def test_custom_command_text_and_label_never_enter_debug_log(monkeypatch, tmp_pa
 
 def test_catalog_quick_button_logs_its_name(monkeypatch, tmp_path):
     logger = _configured_logger(monkeypatch, tmp_path)
-    api = app.Api()
+    api = Api("test")
     session = FakeSession({"game": "gmod"})
     api._sessions["srv-one"] = session
     api._exec("srv-one", session, "status", "Status")
@@ -68,7 +69,7 @@ def test_catalog_quick_button_logs_its_name(monkeypatch, tmp_path):
 
 def test_non_catalog_label_never_enters_debug_log(monkeypatch, tmp_path):
     logger = _configured_logger(monkeypatch, tmp_path)
-    api = app.Api()
+    api = Api("test")
     session = FakeSession({"game": "gmod"})
     api._sessions["srv-one"] = session
     api._exec("srv-one", session, "status", "Private label")
@@ -80,7 +81,7 @@ def test_non_catalog_label_never_enters_debug_log(monkeypatch, tmp_path):
 
 def test_warning_before_page_ready_is_returned_once(monkeypatch, tmp_path):
     _configured_logger(monkeypatch, tmp_path)
-    api = app.Api()
+    api = Api("test")
     api._handle_debug_warning("Debug log: test warning")
     assert api.get_config()["debugWarnings"] == ["Debug log: test warning"]
     assert api.get_config()["debugWarnings"] == []
@@ -88,7 +89,7 @@ def test_warning_before_page_ready_is_returned_once(monkeypatch, tmp_path):
 
 def test_warning_after_ready_is_emitted_with_disabled_state(monkeypatch, tmp_path):
     logger = _configured_logger(monkeypatch, tmp_path)
-    api = app.Api()
+    api = Api("test")
     events = []
     monkeypatch.setattr(api, "_emit", lambda channel, payload: events.append((channel, payload)))
     api._set_window(object())
@@ -102,7 +103,7 @@ def test_warning_after_ready_is_emitted_with_disabled_state(monkeypatch, tmp_pat
 
 def test_mark_frontend_ready_flushes_warnings_queued_after_config(monkeypatch, tmp_path):
     _configured_logger(monkeypatch, tmp_path)
-    api = app.Api()
+    api = Api("test")
     assert api.get_config()["debugWarnings"] == []
     api._handle_debug_warning("late warning")
     events = []

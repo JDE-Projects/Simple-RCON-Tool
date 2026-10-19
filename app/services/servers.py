@@ -195,3 +195,48 @@ def load_servers():
 
 def save_servers(servers):
     return files._write_json_atomic(paths.SERVERS_FILE, servers, indent=2)
+
+
+def save_server(api, server):
+    cleaned = _validate_server(server, require_catalog_game=True)
+    if isinstance(cleaned, str):
+        return {"ok": False, "error": cleaned}
+    server = cleaned
+    try:
+        saved_servers = load_servers()
+    except ServerStoreError as exc:
+        return {"ok": False, "error": str(exc)}
+    warning = _take_server_store_warning()
+    if server.get("id"):
+        for i, s in enumerate(saved_servers):
+            if s["id"] == server["id"]:
+                saved_servers[i] = server
+                break
+        else:
+            saved_servers.append(server)
+    else:
+        server["id"] = _new_server_id()
+        saved_servers.append(server)
+    if not save_servers(saved_servers):
+        diagnostics.debug_log(f"save_server write failed: {server['id']}")
+        return _with_warning({
+            "ok": False,
+            "error": "The server could not be saved. Your saved list was not changed.",
+        }, warning)
+    return _with_warning({"ok": True, "servers": saved_servers}, warning)
+
+
+def delete_server(api, server_id):
+    try:
+        saved_servers = [s for s in load_servers() if s["id"] != server_id]
+    except ServerStoreError as exc:
+        return {"ok": False, "error": str(exc)}
+    warning = _take_server_store_warning()
+    if not save_servers(saved_servers):
+        diagnostics.debug_log(f"delete_server write failed: {server_id}")
+        return _with_warning({
+            "ok": False,
+            "error": "The server could not be deleted. Your saved list was not changed.",
+        }, warning)
+    api.disconnect(server_id)
+    return _with_warning({"ok": True, "servers": saved_servers}, warning)

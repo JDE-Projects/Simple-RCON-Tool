@@ -3,7 +3,7 @@ import socket
 
 import pytest
 
-import simple_rcon_tool as app
+from app.api import Api
 from app import paths
 from app.services import catalog, rcon
 
@@ -76,14 +76,14 @@ def test_connect_rejects_saved_unsupported_game_before_password_check(monkeypatc
         "game": "rust", "buttons": [],
     }]), encoding="utf-8")
     monkeypatch.setattr(paths, "SERVERS_FILE", str(servers_file))
-    api = app.Api()
+    api = Api("test")
 
     assert api.connect("srv-rust", "") == {"ok": False, "error": UNSUPPORTED_GAME_ERROR}
     assert api._sessions == {}
 
 
 def test_save_server_rejects_removed_game():
-    result = app.Api().save_server({
+    result = Api("test").save_server({
         "name": "Factorio server", "host": "127.0.0.1", "port": 27015,
         "game": "factorio", "buttons": [],
     })

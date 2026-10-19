@@ -1,6 +1,6 @@
 import os
 
-import simple_rcon_tool as app
+from app.api import Api
 from app import paths
 from app.services import diagnostics, prefs, servers
 
@@ -25,7 +25,7 @@ def test_every_data_location_points_at_the_temp_folder(isolated_app_data):
 def test_default_writes_land_in_the_temp_folder(isolated_app_data):
     assert prefs.save_prefs({"theme": "light"})
     assert servers.save_servers([])
-    export = app.Api().export_console("Isolation", "text")
+    export = Api("test").export_console("Isolation", "text")
 
     assert export["ok"] is True
     assert os.path.dirname(export["path"]) == isolated_app_data

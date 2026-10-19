@@ -2,7 +2,7 @@ import json
 import os
 
 from app import files, paths
-from app.services import diagnostics
+from app.services import catalog, diagnostics, servers
 
 
 # ----------------------------------------------------------------------------
@@ -43,3 +43,42 @@ def _set_aside_unreadable_prefs(reason):
     else:
         diagnostics.debug_log(f"load_prefs set aside unreadable data: {reason}")
     return {}
+
+
+def get_config(api):
+    try:
+        saved_servers = servers.load_servers()
+        warning = servers._take_server_store_warning()
+    except servers.ServerStoreError as exc:
+        saved_servers = []
+        warning = str(exc)
+    with api._debug_warnings_lock:
+        debug_warnings = api._debug_warnings
+        api._debug_warnings = []
+    return {
+        "servers": saved_servers,
+        "catalog": catalog.GAME_CATALOG,
+        "version": api._version,
+        "debug": diagnostics._debug_logger.is_enabled(),
+        "storeWarning": warning,
+        "debugWarnings": debug_warnings,
+    }
+
+
+def get_theme(api):
+    theme = load_prefs().get("theme")
+    return theme if theme in ("dark", "light") else "dark"
+
+
+def save_theme(api, theme):
+    if theme not in ("dark", "light"):
+        return {"ok": False}
+    saved_prefs = load_prefs()
+    saved_prefs["theme"] = theme
+    if save_prefs(saved_prefs):
+        return {"ok": True}
+    diagnostics.debug_log("save_theme write failed")
+    return {
+        "ok": False,
+        "error": "Couldn't save the theme choice. It will stay until you close the app.",
+    }

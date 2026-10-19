@@ -5,7 +5,7 @@ import threading
 
 import pytest
 
-import simple_rcon_tool as app
+from app.api import Api
 from app import paths
 from app.services import diagnostics, rcon, servers
 
@@ -150,7 +150,7 @@ def test_session_connect_wipes_password_when_socket_connection_fails(monkeypatch
 def test_api_connect_auth_failure_leaves_no_session_and_wipes_password(monkeypatch):
     sock = FakeSocket(-1)
     monkeypatch.setattr(rcon.socket, "create_connection", lambda *_args, **_kwargs: sock)
-    api = app.Api()
+    api = Api("test")
 
     result = api.connect(SERVER["id"], "wrong-password")
 
@@ -163,7 +163,7 @@ def test_api_connect_auth_failure_leaves_no_session_and_wipes_password(monkeypat
 def test_replaced_command_outcome_is_silent_and_keeps_new_session(
     monkeypatch, fake_session, result,
 ):
-    api = app.Api()
+    api = Api("test")
     old = fake_session(SERVER, "old")
     old.block_command = True
     old.command_result = result or ""
@@ -191,7 +191,7 @@ def test_replaced_command_outcome_is_silent_and_keeps_new_session(
 
 
 def test_disconnect_during_command_has_no_second_idle_event(monkeypatch, fake_session):
-    api = app.Api()
+    api = Api("test")
     session = fake_session(SERVER, "password")
     session.block_command = True
     session.command_error = rcon.RconError("command failed")
@@ -213,7 +213,7 @@ def test_disconnect_during_command_has_no_second_idle_event(monkeypatch, fake_se
 
 
 def test_delete_cancels_connect_before_it_can_install(monkeypatch, fake_session):
-    api = app.Api()
+    api = Api("test")
     events, _debug, _debug_called = _record_events(api, monkeypatch)
     original_connect = FakeSession.connect
 
@@ -239,7 +239,7 @@ def test_delete_cancels_connect_before_it_can_install(monkeypatch, fake_session)
 
 
 def test_disconnect_all_cancels_pending_connect_without_a_session(monkeypatch, fake_session):
-    api = app.Api()
+    api = Api("test")
     original_connect = FakeSession.connect
 
     def blocked_connect(self):
@@ -263,7 +263,7 @@ def test_disconnect_all_cancels_pending_connect_without_a_session(monkeypatch, f
 
 
 def test_later_overlapping_connect_installs_and_earlier_session_closes(monkeypatch, fake_session):
-    api = app.Api()
+    api = Api("test")
     original_connect = FakeSession.connect
 
     def first_connect_blocks(self):
@@ -290,7 +290,7 @@ def test_later_overlapping_connect_installs_and_earlier_session_closes(monkeypat
 
 
 def test_current_command_failure_logs_removes_closes_and_emits_idle(monkeypatch, fake_session):
-    api = app.Api()
+    api = Api("test")
     session = fake_session(SERVER, "password")
     session.command_error = rcon.RconError("Connection closed by server.")
     api._sessions[SERVER["id"]] = session
@@ -364,7 +364,7 @@ def test_current_command_failure_logs_removes_closes_and_emits_idle(monkeypatch,
     ids=["expected_disconnect", "replied", "no_reply", "failed"],
 )
 def test_stop_command_outcomes_log_and_manage_session(monkeypatch, fake_session, result, error, expected_events, kept):
-    api = app.Api()
+    api = Api("test")
     server = {**SERVER, "game": "minecraft"}
     session = fake_session(server, "password")
     session.command_result = result
@@ -385,7 +385,7 @@ def test_stop_command_outcomes_log_and_manage_session(monkeypatch, fake_session,
 
 
 def test_non_stop_connection_reset_still_logs_a_friendly_error(monkeypatch, fake_session):
-    api = app.Api()
+    api = Api("test")
     session = fake_session(SERVER, "password")
     session.command_error = ConnectionResetError()
     api._sessions[SERVER["id"]] = session
@@ -400,7 +400,7 @@ def test_non_stop_connection_reset_still_logs_a_friendly_error(monkeypatch, fake
 
 
 def test_no_reply_warns_and_keeps_session_connected(monkeypatch, fake_session):
-    api = app.Api()
+    api = Api("test")
     session = fake_session(SERVER, "password")
     session.command_result = None
     api._sessions[SERVER["id"]] = session
@@ -417,7 +417,7 @@ def test_no_reply_warns_and_keeps_session_connected(monkeypatch, fake_session):
 
 
 def test_empty_reply_still_logs_muted_no_output(monkeypatch, fake_session):
-    api = app.Api()
+    api = Api("test")
     session = fake_session(SERVER, "password")
     api._sessions[SERVER["id"]] = session
     events, _debug, _debug_called = _record_events(api, monkeypatch)
@@ -428,7 +428,7 @@ def test_empty_reply_still_logs_muted_no_output(monkeypatch, fake_session):
 
 
 def test_running_status_and_echo_are_sent_before_command_runs(monkeypatch, fake_session):
-    api = app.Api()
+    api = Api("test")
     session = fake_session(SERVER, "password")
     session.block_command = True
     api._sessions[SERVER["id"]] = session
@@ -504,7 +504,7 @@ def test_real_api_connect_send_and_disconnect_all_has_no_sessions(server_file):
     server = FakeRconServer()
     data = dict(SERVER, port=server.port)
     server_file.write_text(json.dumps([data]), encoding="utf-8")
-    api = app.Api()
+    api = Api("test")
 
     assert api.connect(SERVER["id"], "password") == {"ok": True}
     assert api.send(SERVER["id"], "status") == {"ok": True}
