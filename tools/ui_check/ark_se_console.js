@@ -59,11 +59,11 @@ export default async function arkSeConsole(helpers) {
   await click("#saveBtn");
   await waitFor("document.querySelectorAll('[data-card]').length === 1 && !document.getElementById('modal').classList.contains('show')", 5000);
 
-  // The server takes about six minutes to start on this VM, so Connect is retried
-  // until it answers; an attempt the server does not answer waits out the app's
-  // 8 s timeout. Lines from failed attempts are not judged.
+  // The server takes two to more than seven minutes to start on this VM, so
+  // Connect is retried for about 15 minutes until it answers; each refused
+  // attempt waits 12 s plus a 2 s pause. Lines from failed attempts are not judged.
   let connected = false;
-  for (let attempt = 0; attempt < 32 && !connected; attempt++) {
+  for (let attempt = 0; attempt < 64 && !connected; attempt++) {
     await evaluate("document.querySelector('[data-card] [data-pw]').value = ''");
     await type("[data-card] [data-pw]", fixture.password);
     await click("[data-card] [data-connect]");
@@ -72,6 +72,8 @@ export default async function arkSeConsole(helpers) {
     if (!connected) await sleep(2000);
   }
   check("connected to the ARK: Survival Evolved server", connected, JSON.stringify(await lines()));
+  // The buttons are hidden until a connect succeeds, so nothing else can be checked.
+  if (!connected) return;
   const start = (await lines()).length;
 
   const players1 = await press("List Players");
@@ -108,19 +110,17 @@ export default async function arkSeConsole(helpers) {
   check("Unban Player: reply is the server's unbanned line", same(unban, ["76561197960265728 Unbanned"]), JSON.stringify(unban));
 
   // The server saves and exits, but resets the connection before its "Exiting..."
-  // reply arrives, so the app shows a network error for a shutdown that worked.
-  // This check records the app's lines as they are; it fails once the app reports
-  // the shutdown differently, and should then be updated.
-  const errorsBefore = await evaluate(
-    `Array.from(document.querySelectorAll('#console .ln')).slice(${start}).filter(l => l.classList.contains('err')).length`);
+  // reply arrives. The app treats that reset as the expected end of a stop command.
   const quit = await press("Shutdown", undefined, true);
-  check("Shutdown: the app shows the reset connection as a network error",
-    same(quit, ["Network error. Check the host and your connection.", "Disconnected. Password cleared from memory."]),
+  check("Shutdown: the app reports the expected disconnect",
+    same(quit, ["Server closed the connection, as expected after a stop command.", "Disconnected. Password cleared from memory."]),
     JSON.stringify(quit) + ` after ${tookMs["Shutdown"]} ms`);
 
   const all = (await lines()).slice(start);
   const marked = all.filter(l => /<\d+>/.test(l));
   check("no control characters anywhere in the console", marked.length === 0, JSON.stringify(marked));
-  check("no error lines in the console before Shutdown", errorsBefore === 0, String(errorsBefore));
+  const errors = await evaluate(
+    `Array.from(document.querySelectorAll('#console .ln')).slice(${start}).filter(l => l.classList.contains('err')).map(l => l.textContent)`);
+  check("no error lines in the console once connected", errors.length === 0, JSON.stringify(errors));
   await screenshot("console");
 }
