@@ -700,7 +700,9 @@ GAME_CATALOG = [
         "key": "valheim", "name": "Valheim",
         "sentinel": False,
         "note": "Requires the ValheimRcon mod. Crossplay must be off "
-                "(BepInEx mods do not load with crossplay on).",
+                "(BepInEx mods do not load with crossplay on). On a new world, "
+                "RCON opens only after the server is shut down cleanly and "
+                "started again once.",
         "buttons": [
             {"label": "Save", "command": "save"},
             {"label": "Kick", "command": "kick {arg}"},
