@@ -32,7 +32,7 @@ def main() -> None:
     startup.wShowWindow = 0
     subprocess.Popen(DEFINITION["launch"](ROOT, run, password), cwd=run,
                      creationflags=subprocess.CREATE_NEW_CONSOLE, startupinfo=startup)
-    # The server takes about six minutes to start on this VM: longer than the driver
+    # The server takes two to more than seven minutes to start on this VM: longer than the driver
     # waits for this line, so the scenario retries Connect until the server answers.
     port = DEFINITION["rcon_port"]
     print(json.dumps({"host": "127.0.0.1", "port": port, "password": password}), flush=True)

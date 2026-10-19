@@ -17,8 +17,10 @@ export default async function pzConsole(helpers) {
   const lines = () => evaluate(
     "Array.from(document.querySelectorAll('#console .ln .msg')).map(m => " +
     "Array.from(m.textContent).map(c => c.charCodeAt(0) < 32 && c !== '\\t' ? '<' + c.charCodeAt(0) + '>' : c).join(''))");
-  // The page disables the card's buttons while a command runs.
-  const idle = () => waitFor("!document.querySelector('[data-card] [data-qbtn]').disabled", 10000).catch(() => {});
+  // The page disables the card's buttons while a command runs. A long reply such
+  // as Show Options can take well over 10 s to reach the page line by line.
+  const idle = () => waitFor("!document.querySelector('[data-card] [data-qbtn]').disabled", 30000)
+    .then(() => true).catch(() => false);
 
   // Presses a built-in button (confirming it and typing its value when it asks)
   // and returns the console lines its reply added.
@@ -38,7 +40,7 @@ export default async function pzConsole(helpers) {
     }
     await waitFor(`document.querySelectorAll('#console .ln').length >= ${before} + 2`, 10000).catch(() => {});
     await sleep(1000);
-    await idle();
+    check(`${label}: buttons unlock after the reply`, await idle());
     const added = (await lines()).slice(before);
     return added[0] === `$ ${label}` ? added.slice(1) : added;
   };
