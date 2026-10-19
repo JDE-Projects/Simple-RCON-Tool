@@ -5,9 +5,9 @@ import threading
 from datetime import datetime
 
 
-# Shared debug-log module, kept at the top level of this app. It only writes
-# and prunes log files; the app keeps its own redaction function (passed in as
-# `redact`) so secrets never have to be taught to this shared file.
+# Apps copy this file in as app/debug_log.py. It only writes and prunes log files;
+# the app keeps its own redaction function (passed in as `redact`) so secrets
+# never have to be taught to this shared file.
 class DebugLog:
     # Full file name only: Debug_Log_MMDDYYYY_HHMMSS.txt, with an optional
     # _2, _3, ... suffix for a same-second name clash. Matched strictly so

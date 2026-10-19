@@ -16,7 +16,7 @@ HTML_PATH = Path(__file__).resolve().parents[1] / "simple_rcon_tool-UI.html"
 
 def build_manifest():
     """Return the API names and parameters pywebview exposes from a fresh Api."""
-    app = import_module("simple_rcon_tool")
+    app = import_module("app.api")
     exposed_objects = []
 
     # Copied from pywebview 6.2.1 webview/util.py inject_pywebview's nested
@@ -57,7 +57,7 @@ def build_manifest():
 
         return functions
 
-    return dict(sorted(get_functions(app.Api()).items()))
+    return dict(sorted(get_functions(app.Api("test")).items()))
 
 
 def _manifest_difference(expected, actual):
@@ -96,8 +96,8 @@ def test_manifest_has_no_nested_object_methods():
 
 
 def test_fresh_api_has_only_underscore_instance_attributes():
-    app = import_module("simple_rcon_tool")
-    public = [name for name in vars(app.Api()) if not name.startswith("_")]
+    app = import_module("app.api")
+    public = [name for name in vars(app.Api("test")) if not name.startswith("_")]
     assert not public, f"Api has public instance attributes: {public}"
 
 

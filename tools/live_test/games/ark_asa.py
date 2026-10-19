@@ -79,7 +79,7 @@ DEFINITION = {
     # The server does not log RCON commands; the evidence below is written by the game itself.
     "checks": [
         {"label": "List Players", "expect": {"reply": r"^No Players Connected$"}},
-        {"label": "Save World",
+        {"label": "Save World", "evidence_wait": 10,
          "expect": {"reply": r"^World Saved$", "modified": f"user/Saved/SavedArks/{MAP}/{MAP}.ark"}},
         {"label": "Server Message", "arg": "SRT live test {random}", "evidence_wait": 5,
          "expect": {"reply": NO_RESPONSE, "evidence": chat_logged}},

@@ -3,7 +3,9 @@ import socket
 
 import pytest
 
-import simple_rcon_tool as app
+from app.api import Api
+from app import paths
+from app.services import catalog, rcon
 
 
 UNSUPPORTED_GAME_KEYS = {
@@ -16,15 +18,15 @@ UNSUPPORTED_GAME_ERROR = (
 
 
 def test_catalog_contains_only_unique_source_rcon_games():
-    assert not UNSUPPORTED_GAME_KEYS.intersection(app.CATALOG_BY_KEY)
-    assert len(app.CATALOG_BY_KEY) == len(app.GAME_CATALOG)
-    for game in app.GAME_CATALOG:
+    assert not UNSUPPORTED_GAME_KEYS.intersection(catalog.CATALOG_BY_KEY)
+    assert len(catalog.CATALOG_BY_KEY) == len(catalog.GAME_CATALOG)
+    for game in catalog.GAME_CATALOG:
         assert {"key", "name", "buttons"}.issubset(game)
         assert isinstance(game["buttons"], list)
 
 
 def test_stop_command_catalog_flags_only_the_five_stop_buttons():
-    assert {(game["key"], button["label"]) for game in app.GAME_CATALOG for button in game["buttons"]
+    assert {(game["key"], button["label"]) for game in catalog.GAME_CATALOG for button in game["buttons"]
             if button.get("stops_server")} == {
         ("ark_se", "Shutdown"),
         ("ark_asa", "Shutdown"),
@@ -47,24 +49,24 @@ def test_stop_command_catalog_flags_only_the_five_stop_buttons():
     ],
 )
 def test_is_stop_command_matches_stop_commands_by_text(game_key, command, expected):
-    assert app.is_stop_command(game_key, command) is expected
+    assert rcon.is_stop_command(game_key, command) is expected
 
 
 @pytest.mark.parametrize(
     ("reply", "error", "expected"),
     [
-        (None, app.RconConnectionClosed("closed"), "expected_disconnect"),
+        (None, rcon.RconConnectionClosed("closed"), "expected_disconnect"),
         (None, ConnectionResetError(), "expected_disconnect"),
         (None, ConnectionAbortedError(), "expected_disconnect"),
         (None, None, "no_reply"),
         ("", None, "replied"),
         ("reply", None, "replied"),
-        (None, app.RconError("failed"), "failed"),
+        (None, rcon.RconError("failed"), "failed"),
         (None, socket.timeout(), "failed"),
     ],
 )
 def test_stop_outcome_classifies_replies_and_errors(reply, error, expected):
-    assert app.stop_outcome(reply, error) == expected
+    assert rcon.stop_outcome(reply, error) == expected
 
 
 def test_connect_rejects_saved_unsupported_game_before_password_check(monkeypatch, tmp_path):
@@ -73,15 +75,15 @@ def test_connect_rejects_saved_unsupported_game_before_password_check(monkeypatc
         "id": "srv-rust", "name": "Rust server", "host": "127.0.0.1", "port": 28016,
         "game": "rust", "buttons": [],
     }]), encoding="utf-8")
-    monkeypatch.setattr(app, "SERVERS_FILE", str(servers_file))
-    api = app.Api()
+    monkeypatch.setattr(paths, "SERVERS_FILE", str(servers_file))
+    api = Api("test")
 
     assert api.connect("srv-rust", "") == {"ok": False, "error": UNSUPPORTED_GAME_ERROR}
     assert api._sessions == {}
 
 
 def test_save_server_rejects_removed_game():
-    result = app.Api().save_server({
+    result = Api("test").save_server({
         "name": "Factorio server", "host": "127.0.0.1", "port": 27015,
         "game": "factorio", "buttons": [],
     })

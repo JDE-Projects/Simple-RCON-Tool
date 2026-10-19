@@ -10,7 +10,8 @@ import time
 import zipfile
 from pathlib import Path
 
-from simple_rcon_tool import CATALOG_BY_KEY, Session, stop_outcome
+from app.services.catalog import CATALOG_BY_KEY
+from app.services.rcon import Session, stop_outcome
 from tools.live_test.core import (LiveTestError, WindowsJob, classify_check, download_verified, fill_command,
                                   fresh_password, listener_confirmed, ports_free, utc_stamp,
                                   validate_definition, verify_file, write_results)

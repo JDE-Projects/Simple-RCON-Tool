@@ -5,7 +5,9 @@ import threading
 
 import pytest
 
-import simple_rcon_tool as app
+from app.api import Api
+from app import paths
+from app.services import diagnostics, rcon, servers
 
 
 SERVER = {
@@ -22,8 +24,8 @@ SERVER = {
 def server_file(monkeypatch, tmp_path):
     path = tmp_path / "servers.json"
     path.write_text(json.dumps([SERVER]), encoding="utf-8")
-    monkeypatch.setattr(app, "SERVERS_FILE", str(path))
-    monkeypatch.setattr(app, "_server_store_warning", None)
+    monkeypatch.setattr(paths, "SERVERS_FILE", str(path))
+    monkeypatch.setattr(servers, "_server_store_warning", None)
     return path
 
 
@@ -34,7 +36,7 @@ def _packet(req_id, type_, body):
 
 class FakeSocket:
     def __init__(self, auth_id):
-        self._reply = bytearray(_packet(auth_id, app.RconClient.SERVERDATA_AUTH_RESPONSE, ""))
+        self._reply = bytearray(_packet(auth_id, rcon.RconClient.SERVERDATA_AUTH_RESPONSE, ""))
         self.closed = False
         self.timeout = None
 
@@ -95,7 +97,7 @@ class FakeSession:
 def fake_session(monkeypatch):
     FakeSession.instances = []
     FakeSession.instance_created = threading.Event()
-    monkeypatch.setattr(app, "Session", FakeSession)
+    monkeypatch.setattr(rcon, "Session", FakeSession)
     return FakeSession
 
 
@@ -109,7 +111,7 @@ def _record_events(api, monkeypatch):
         debug_called.set()
 
     monkeypatch.setattr(api, "_emit", lambda channel, payload: events.append((channel, payload)))
-    monkeypatch.setattr(app, "debug_log", record_debug)
+    monkeypatch.setattr(diagnostics, "debug_log", record_debug)
     return events, debug, debug_called
 
 
@@ -120,10 +122,10 @@ def _join(thread):
 
 def test_session_connect_closes_and_wipes_password_after_auth_failure(monkeypatch):
     sock = FakeSocket(-1)
-    monkeypatch.setattr(app.socket, "create_connection", lambda *_args, **_kwargs: sock)
-    session = app.Session(SERVER, "wrong-password")
+    monkeypatch.setattr(rcon.socket, "create_connection", lambda *_args, **_kwargs: sock)
+    session = rcon.Session(SERVER, "wrong-password")
 
-    with pytest.raises(app.RconError, match="Authentication failed"):
+    with pytest.raises(rcon.RconError, match="Authentication failed"):
         session.connect()
 
     assert sock.closed
@@ -133,10 +135,10 @@ def test_session_connect_closes_and_wipes_password_after_auth_failure(monkeypatc
 
 def test_session_connect_wipes_password_when_socket_connection_fails(monkeypatch):
     monkeypatch.setattr(
-        app.socket, "create_connection",
+        rcon.socket, "create_connection",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(ConnectionRefusedError()),
     )
-    session = app.Session(SERVER, "password")
+    session = rcon.Session(SERVER, "password")
 
     with pytest.raises(ConnectionRefusedError):
         session.connect()
@@ -147,8 +149,8 @@ def test_session_connect_wipes_password_when_socket_connection_fails(monkeypatch
 
 def test_api_connect_auth_failure_leaves_no_session_and_wipes_password(monkeypatch):
     sock = FakeSocket(-1)
-    monkeypatch.setattr(app.socket, "create_connection", lambda *_args, **_kwargs: sock)
-    api = app.Api()
+    monkeypatch.setattr(rcon.socket, "create_connection", lambda *_args, **_kwargs: sock)
+    api = Api("test")
 
     result = api.connect(SERVER["id"], "wrong-password")
 
@@ -161,12 +163,12 @@ def test_api_connect_auth_failure_leaves_no_session_and_wipes_password(monkeypat
 def test_replaced_command_outcome_is_silent_and_keeps_new_session(
     monkeypatch, fake_session, result,
 ):
-    api = app.Api()
+    api = Api("test")
     old = fake_session(SERVER, "old")
     old.block_command = True
     old.command_result = result or ""
     if result is None:
-        old.command_error = app.RconError("old command failed")
+        old.command_error = rcon.RconError("old command failed")
     api._sessions[SERVER["id"]] = old
     events, debug, debug_called = _record_events(api, monkeypatch)
 
@@ -189,10 +191,10 @@ def test_replaced_command_outcome_is_silent_and_keeps_new_session(
 
 
 def test_disconnect_during_command_has_no_second_idle_event(monkeypatch, fake_session):
-    api = app.Api()
+    api = Api("test")
     session = fake_session(SERVER, "password")
     session.block_command = True
-    session.command_error = app.RconError("command failed")
+    session.command_error = rcon.RconError("command failed")
     api._sessions[SERVER["id"]] = session
     events, debug, debug_called = _record_events(api, monkeypatch)
 
@@ -211,7 +213,7 @@ def test_disconnect_during_command_has_no_second_idle_event(monkeypatch, fake_se
 
 
 def test_delete_cancels_connect_before_it_can_install(monkeypatch, fake_session):
-    api = app.Api()
+    api = Api("test")
     events, _debug, _debug_called = _record_events(api, monkeypatch)
     original_connect = FakeSession.connect
 
@@ -237,7 +239,7 @@ def test_delete_cancels_connect_before_it_can_install(monkeypatch, fake_session)
 
 
 def test_disconnect_all_cancels_pending_connect_without_a_session(monkeypatch, fake_session):
-    api = app.Api()
+    api = Api("test")
     original_connect = FakeSession.connect
 
     def blocked_connect(self):
@@ -261,7 +263,7 @@ def test_disconnect_all_cancels_pending_connect_without_a_session(monkeypatch, f
 
 
 def test_later_overlapping_connect_installs_and_earlier_session_closes(monkeypatch, fake_session):
-    api = app.Api()
+    api = Api("test")
     original_connect = FakeSession.connect
 
     def first_connect_blocks(self):
@@ -288,9 +290,9 @@ def test_later_overlapping_connect_installs_and_earlier_session_closes(monkeypat
 
 
 def test_current_command_failure_logs_removes_closes_and_emits_idle(monkeypatch, fake_session):
-    api = app.Api()
+    api = Api("test")
     session = fake_session(SERVER, "password")
-    session.command_error = app.RconError("Connection closed by server.")
+    session.command_error = rcon.RconError("Connection closed by server.")
     api._sessions[SERVER["id"]] = session
     events, _debug, _debug_called = _record_events(api, monkeypatch)
 
@@ -313,7 +315,7 @@ def test_current_command_failure_logs_removes_closes_and_emits_idle(monkeypatch,
     [
         (
             None,
-            app.RconConnectionClosed("Connection closed by server."),
+            rcon.RconConnectionClosed("Connection closed by server."),
             [
                 ("status", {"serverId": "srv-one", "state": "running"}),
                 ("log", {"serverId": "srv-one", "text": "$ Stop Server", "level": "cmd"}),
@@ -348,7 +350,7 @@ def test_current_command_failure_logs_removes_closes_and_emits_idle(monkeypatch,
         ),
         (
             None,
-            app.RconError("command failed"),
+            rcon.RconError("command failed"),
             [
                 ("status", {"serverId": "srv-one", "state": "running"}),
                 ("log", {"serverId": "srv-one", "text": "$ Stop Server", "level": "cmd"}),
@@ -362,7 +364,7 @@ def test_current_command_failure_logs_removes_closes_and_emits_idle(monkeypatch,
     ids=["expected_disconnect", "replied", "no_reply", "failed"],
 )
 def test_stop_command_outcomes_log_and_manage_session(monkeypatch, fake_session, result, error, expected_events, kept):
-    api = app.Api()
+    api = Api("test")
     server = {**SERVER, "game": "minecraft"}
     session = fake_session(server, "password")
     session.command_result = result
@@ -375,7 +377,7 @@ def test_stop_command_outcomes_log_and_manage_session(monkeypatch, fake_session,
     assert events == expected_events
     assert (api._sessions == {SERVER["id"]: session}) is kept
     assert session.closed is not kept
-    if isinstance(error, app.RconConnectionClosed):
+    if isinstance(error, rcon.RconConnectionClosed):
         assert debug == [
             'send: quick button "Stop Server" (server srv-one)',
             "command: RconConnectionClosed: Connection closed by server.",
@@ -383,7 +385,7 @@ def test_stop_command_outcomes_log_and_manage_session(monkeypatch, fake_session,
 
 
 def test_non_stop_connection_reset_still_logs_a_friendly_error(monkeypatch, fake_session):
-    api = app.Api()
+    api = Api("test")
     session = fake_session(SERVER, "password")
     session.command_error = ConnectionResetError()
     api._sessions[SERVER["id"]] = session
@@ -398,7 +400,7 @@ def test_non_stop_connection_reset_still_logs_a_friendly_error(monkeypatch, fake
 
 
 def test_no_reply_warns_and_keeps_session_connected(monkeypatch, fake_session):
-    api = app.Api()
+    api = Api("test")
     session = fake_session(SERVER, "password")
     session.command_result = None
     api._sessions[SERVER["id"]] = session
@@ -415,7 +417,7 @@ def test_no_reply_warns_and_keeps_session_connected(monkeypatch, fake_session):
 
 
 def test_empty_reply_still_logs_muted_no_output(monkeypatch, fake_session):
-    api = app.Api()
+    api = Api("test")
     session = fake_session(SERVER, "password")
     api._sessions[SERVER["id"]] = session
     events, _debug, _debug_called = _record_events(api, monkeypatch)
@@ -426,7 +428,7 @@ def test_empty_reply_still_logs_muted_no_output(monkeypatch, fake_session):
 
 
 def test_running_status_and_echo_are_sent_before_command_runs(monkeypatch, fake_session):
-    api = app.Api()
+    api = Api("test")
     session = fake_session(SERVER, "password")
     session.block_command = True
     api._sessions[SERVER["id"]] = session
@@ -474,14 +476,14 @@ class FakeRconServer:
             conn, _ = self._listener.accept()
             with conn:
                 auth_id, auth_type = self._recv_packet(conn)
-                assert auth_type == app.RconClient.SERVERDATA_AUTH
-                conn.sendall(_packet(auth_id, app.RconClient.SERVERDATA_AUTH_RESPONSE, ""))
+                assert auth_type == rcon.RconClient.SERVERDATA_AUTH
+                conn.sendall(_packet(auth_id, rcon.RconClient.SERVERDATA_AUTH_RESPONSE, ""))
                 command_id, command_type = self._recv_packet(conn)
                 sentinel_id, sentinel_type = self._recv_packet(conn)
-                assert command_type == app.RconClient.SERVERDATA_EXECCOMMAND
-                assert sentinel_type == app.RconClient.SERVERDATA_RESPONSE_VALUE
-                conn.sendall(_packet(command_id, app.RconClient.SERVERDATA_RESPONSE_VALUE, "ok"))
-                conn.sendall(_packet(sentinel_id, app.RconClient.SERVERDATA_RESPONSE_VALUE, ""))
+                assert command_type == rcon.RconClient.SERVERDATA_EXECCOMMAND
+                assert sentinel_type == rcon.RconClient.SERVERDATA_RESPONSE_VALUE
+                conn.sendall(_packet(command_id, rcon.RconClient.SERVERDATA_RESPONSE_VALUE, "ok"))
+                conn.sendall(_packet(sentinel_id, rcon.RconClient.SERVERDATA_RESPONSE_VALUE, ""))
                 self.command_complete.set()
                 try:
                     conn.recv(1)
@@ -502,7 +504,7 @@ def test_real_api_connect_send_and_disconnect_all_has_no_sessions(server_file):
     server = FakeRconServer()
     data = dict(SERVER, port=server.port)
     server_file.write_text(json.dumps([data]), encoding="utf-8")
-    api = app.Api()
+    api = Api("test")
 
     assert api.connect(SERVER["id"], "password") == {"ok": True}
     assert api.send(SERVER["id"], "status") == {"ok": True}

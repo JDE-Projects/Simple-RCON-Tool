@@ -3,7 +3,7 @@ import socket
 import ssl
 import urllib.error
 
-from simple_rcon_tool import _update_error_reason
+from app.services.updates import _update_error_reason
 
 
 def _http_error(code):

@@ -1,8 +1,10 @@
+import threading
 from types import SimpleNamespace
 
 import pytest
 
 import simple_rcon_tool as app
+from app.services import window as window_service
 
 
 class _Call:
@@ -48,29 +50,28 @@ def test_own_window_handle_filters_process_visibility_and_exact_title(monkeypatc
         3: {"pid": own_pid, "title": "Simple RCON Tool", "visible": False},
         4: {"pid": own_pid, "title": "Simple RCON Tool", "visible": True},
     }
-    monkeypatch.setattr(app.ctypes, "windll", SimpleNamespace(user32=_window_api(windows)), raising=False)
-    monkeypatch.setattr(app.ctypes, "WINFUNCTYPE", lambda *_args: lambda callback: callback)
-    monkeypatch.setattr(app.os, "getpid", lambda: own_pid)
+    monkeypatch.setattr(window_service.ctypes, "windll", SimpleNamespace(user32=_window_api(windows)), raising=False)
+    monkeypatch.setattr(window_service.ctypes, "WINFUNCTYPE", lambda *_args: lambda callback: callback)
+    monkeypatch.setattr(window_service.os, "getpid", lambda: own_pid)
 
-    assert app._own_window_handle("Simple RCON Tool") == 4
+    assert window_service._own_window_handle("Simple RCON Tool") == 4
 
 
 def test_own_window_handle_returns_none_when_enumeration_fails(monkeypatch):
     user32 = _window_api({})
     user32.EnumWindows = _Call(lambda *_args: (_ for _ in ()).throw(OSError("blocked")))
-    monkeypatch.setattr(app.ctypes, "windll", SimpleNamespace(user32=user32), raising=False)
-    monkeypatch.setattr(app.ctypes, "WINFUNCTYPE", lambda *_args: lambda callback: callback)
+    monkeypatch.setattr(window_service.ctypes, "windll", SimpleNamespace(user32=user32), raising=False)
+    monkeypatch.setattr(window_service.ctypes, "WINFUNCTYPE", lambda *_args: lambda callback: callback)
 
-    assert app._own_window_handle("Simple RCON Tool") is None
+    assert window_service._own_window_handle("Simple RCON Tool") is None
 
 
 @pytest.mark.parametrize("function_name", ["_save_geometry", "_restore_geometry"])
 def test_second_instance_skips_geometry(monkeypatch, function_name):
-    monkeypatch.setattr(app, "IS_SECOND_INSTANCE", True)
-    monkeypatch.setattr(app, "_win32", lambda: pytest.fail("Win32 must not be used"))
-    monkeypatch.setattr(app, "_own_window_handle", lambda _title: pytest.fail("lookup must not run"))
+    monkeypatch.setattr(window_service, "_win32", lambda: pytest.fail("Win32 must not be used"))
+    monkeypatch.setattr(window_service, "_own_window_handle", lambda _title: pytest.fail("lookup must not run"))
 
-    getattr(app, function_name)(SimpleNamespace(title="Simple RCON Tool"))
+    getattr(window_service, function_name)(SimpleNamespace(title="Simple RCON Tool"), True)
 
 
 def test_main_marks_second_instance_and_wires_geometry_suppression(monkeypatch):
@@ -86,11 +87,11 @@ def test_main_marks_second_instance_and_wires_geometry_suppression(monkeypatch):
     monkeypatch.setattr(app, "IS_SECOND_INSTANCE", False)
     monkeypatch.setattr(app, "_acquire_single_instance", lambda _name: False)
     monkeypatch.setattr(app, "_prompt_second_instance", lambda _title: True)
-    monkeypatch.setattr(app.threading, "Thread", lambda *args, **kwargs: SimpleNamespace(start=lambda: None))
+    monkeypatch.setattr(threading, "Thread", lambda *args, **kwargs: SimpleNamespace(start=lambda: None))
     monkeypatch.setattr(app.webview, "create_window", lambda *args, **kwargs: window)
     monkeypatch.setattr(app.webview, "start", lambda **kwargs: None)
-    monkeypatch.setattr(app, "_restore_geometry", lambda _window: pytest.fail("restore must be skipped"))
-    monkeypatch.setattr(app, "_save_geometry", lambda _window: pytest.fail("save must be skipped"))
+    monkeypatch.setattr(window_service, "_restore_geometry", lambda _window, _second: pytest.fail("restore must be skipped"))
+    monkeypatch.setattr(window_service, "_save_geometry", lambda _window, _second: pytest.fail("save must be skipped"))
 
     app.main()
 
@@ -123,71 +124,70 @@ def _restore_user32(point_monitor=1, window_monitor=1):
     )
 
 
-def _patch_restore_environment(monkeypatch, prefs, *, current_rect=(10, 20, 110, 120), point_monitor=1,
+def _patch_restore_environment(monkeypatch, saved_prefs, *, current_rect=(10, 20, 110, 120), point_monitor=1,
                                window_monitor=1, work=(0, 0, 100, 100)):
     user32 = _restore_user32(point_monitor, window_monitor)
     window_api, calls = _restore_api(current_rect)
-    monkeypatch.setattr(app, "IS_SECOND_INSTANCE", False)
-    monkeypatch.setattr(app, "load_prefs", lambda: prefs)
-    monkeypatch.setattr(app.ctypes, "windll", SimpleNamespace(user32=user32), raising=False)
-    monkeypatch.setattr(app, "_win32", lambda: window_api)
-    monkeypatch.setattr(app, "_own_window_handle", lambda _title: 42)
-    monkeypatch.setattr(app, "_monitor_work_area", lambda _monitor: work)
-    monkeypatch.setattr(app, "_frame_insets", lambda _hwnd: (0, 0, 0, 0))
-    monkeypatch.setattr(app.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(window_service.prefs, "load_prefs", lambda: saved_prefs)
+    monkeypatch.setattr(window_service.ctypes, "windll", SimpleNamespace(user32=user32), raising=False)
+    monkeypatch.setattr(window_service, "_win32", lambda: window_api)
+    monkeypatch.setattr(window_service, "_own_window_handle", lambda _title: 42)
+    monkeypatch.setattr(window_service, "_monitor_work_area", lambda _monitor: work)
+    monkeypatch.setattr(window_service, "_frame_insets", lambda _hwnd: (0, 0, 0, 0))
+    monkeypatch.setattr(window_service.time, "sleep", lambda _seconds: None)
     return calls
 
 
 def test_fit_rect_to_work_area_shrinks_width():
-    assert app.fit_rect_to_work_area(0, 20, 140, 60, (0, 0, 100, 100), (0, 0, 0, 0)) == (0, 20, 100, 60)
+    assert window_service.fit_rect_to_work_area(0, 20, 140, 60, (0, 0, 100, 100), (0, 0, 0, 0)) == (0, 20, 100, 60)
 
 
 def test_fit_rect_to_work_area_shrinks_height():
-    assert app.fit_rect_to_work_area(20, 0, 60, 140, (0, 0, 100, 100), (0, 0, 0, 0)) == (20, 0, 60, 100)
+    assert window_service.fit_rect_to_work_area(20, 0, 60, 140, (0, 0, 100, 100), (0, 0, 0, 0)) == (20, 0, 60, 100)
 
 
 def test_fit_rect_to_work_area_moves_past_right_and_bottom():
-    assert app.fit_rect_to_work_area(70, 80, 40, 30, (0, 0, 100, 100), (0, 0, 0, 0)) == (60, 70, 40, 30)
+    assert window_service.fit_rect_to_work_area(70, 80, 40, 30, (0, 0, 100, 100), (0, 0, 0, 0)) == (60, 70, 40, 30)
 
 
 def test_fit_rect_to_work_area_moves_past_left_and_top():
-    assert app.fit_rect_to_work_area(-10, -20, 40, 30, (0, 0, 100, 100), (0, 0, 0, 0)) == (0, 0, 40, 30)
+    assert window_service.fit_rect_to_work_area(-10, -20, 40, 30, (0, 0, 100, 100), (0, 0, 0, 0)) == (0, 0, 40, 30)
 
 
 def test_fit_rect_to_work_area_keeps_snapped_visible_edge():
-    assert app.fit_rect_to_work_area(-7, 0, 114, 107, (0, 0, 100, 100), (7, 0, 7, 7)) == (-7, 0, 114, 107)
+    assert window_service.fit_rect_to_work_area(-7, 0, 114, 107, (0, 0, 100, 100), (7, 0, 7, 7)) == (-7, 0, 114, 107)
 
 
 def test_fit_rect_to_work_area_keeps_already_fitting_rect():
-    assert app.fit_rect_to_work_area(10, 20, 60, 50, (0, 0, 100, 100), (2, 3, 4, 5)) == (10, 20, 60, 50)
+    assert window_service.fit_rect_to_work_area(10, 20, 60, 50, (0, 0, 100, 100), (2, 3, 4, 5)) == (10, 20, 60, 50)
 
 
 def test_fit_rect_to_work_area_handles_negative_origin():
-    assert app.fit_rect_to_work_area(-180, 10, 80, 40, (-200, 0, 0, 100), (0, 0, 0, 0)) == (-180, 10, 80, 40)
+    assert window_service.fit_rect_to_work_area(-180, 10, 80, 40, (-200, 0, 0, 100), (0, 0, 0, 0)) == (-180, 10, 80, 40)
 
 
 def test_fit_rect_to_work_area_keeps_top_left_when_larger_in_both_directions():
-    assert app.fit_rect_to_work_area(-20, -20, 140, 140, (0, 0, 100, 100), (0, 0, 0, 0)) == (0, 0, 100, 100)
+    assert window_service.fit_rect_to_work_area(-20, -20, 140, 140, (0, 0, 100, 100), (0, 0, 0, 0)) == (0, 0, 100, 100)
 
 
 def test_fit_rect_to_work_area_moves_past_left_edge_only():
-    assert app.fit_rect_to_work_area(-10, 20, 40, 30, (0, 0, 100, 100), (0, 0, 0, 0)) == (0, 20, 40, 30)
+    assert window_service.fit_rect_to_work_area(-10, 20, 40, 30, (0, 0, 100, 100), (0, 0, 0, 0)) == (0, 20, 40, 30)
 
 
 def test_fit_rect_to_work_area_moves_past_top_edge_only():
-    assert app.fit_rect_to_work_area(20, -10, 40, 30, (0, 0, 100, 100), (0, 0, 0, 0)) == (20, 0, 40, 30)
+    assert window_service.fit_rect_to_work_area(20, -10, 40, 30, (0, 0, 100, 100), (0, 0, 0, 0)) == (20, 0, 40, 30)
 
 
 def test_fit_rect_to_work_area_moves_past_right_edge_only():
-    assert app.fit_rect_to_work_area(80, 20, 30, 40, (0, 0, 100, 100), (0, 0, 0, 0)) == (70, 20, 30, 40)
+    assert window_service.fit_rect_to_work_area(80, 20, 30, 40, (0, 0, 100, 100), (0, 0, 0, 0)) == (70, 20, 30, 40)
 
 
 def test_fit_rect_to_work_area_moves_past_bottom_edge_only():
-    assert app.fit_rect_to_work_area(20, 80, 40, 30, (0, 0, 100, 100), (0, 0, 0, 0)) == (20, 70, 40, 30)
+    assert window_service.fit_rect_to_work_area(20, 80, 40, 30, (0, 0, 100, 100), (0, 0, 0, 0)) == (20, 70, 40, 30)
 
 
 def test_fit_rect_to_work_area_respects_nonzero_top_left_work_area():
-    assert app.fit_rect_to_work_area(0, 0, 40, 30, (10, 20, 110, 120), (0, 0, 0, 0)) == (10, 20, 40, 30)
+    assert window_service.fit_rect_to_work_area(0, 0, 40, 30, (10, 20, 110, 120), (0, 0, 0, 0)) == (10, 20, 40, 30)
 
 
 def test_restore_geometry_fits_oversized_saved_rect(monkeypatch):
@@ -195,7 +195,7 @@ def test_restore_geometry_fits_oversized_saved_rect(monkeypatch):
         monkeypatch, {"window": {"x": 10, "y": 20, "width": 200, "height": 150}}
     )
 
-    app._restore_geometry(SimpleNamespace(title="Simple RCON Tool"))
+    window_service._restore_geometry(SimpleNamespace(title="Simple RCON Tool"), False)
 
     assert calls[0] == (42, None, 0, 0, 100, 100, 0x0004 | 0x0010)
 
@@ -207,7 +207,7 @@ def test_restore_geometry_applies_fitting_saved_rect_once(monkeypatch):
         current_rect=(10, 20, 60, 60),
     )
 
-    app._restore_geometry(SimpleNamespace(title="Simple RCON Tool"))
+    window_service._restore_geometry(SimpleNamespace(title="Simple RCON Tool"), False)
 
     assert calls == [(42, None, 10, 20, 50, 40, 0x0004 | 0x0010)]
 
@@ -219,7 +219,7 @@ def test_restore_geometry_refits_after_delay(monkeypatch):
         current_rect=(80, 70, 130, 110),
     )
 
-    app._restore_geometry(SimpleNamespace(title="Simple RCON Tool"))
+    window_service._restore_geometry(SimpleNamespace(title="Simple RCON Tool"), False)
 
     assert calls == [
         (42, None, 10, 20, 50, 40, 0x0004 | 0x0010),
@@ -232,16 +232,16 @@ def test_restore_geometry_skips_disconnected_monitor(monkeypatch):
         monkeypatch, {"window": {"x": 10, "y": 20, "width": 50, "height": 40}}, point_monitor=0
     )
 
-    app._restore_geometry(SimpleNamespace(title="Simple RCON Tool"))
+    window_service._restore_geometry(SimpleNamespace(title="Simple RCON Tool"), False)
 
     assert calls == []
 
 
 def test_restore_geometry_skips_missing_work_area(monkeypatch):
     calls = _patch_restore_environment(monkeypatch, {"window": {"x": 10, "y": 20, "width": 50, "height": 40}})
-    monkeypatch.setattr(app, "_monitor_work_area", lambda _monitor: None)
+    monkeypatch.setattr(window_service, "_monitor_work_area", lambda _monitor: None)
 
-    app._restore_geometry(SimpleNamespace(title="Simple RCON Tool"))
+    window_service._restore_geometry(SimpleNamespace(title="Simple RCON Tool"), False)
 
     assert calls == []
 
@@ -262,25 +262,25 @@ def test_restore_geometry_skips_missing_work_area(monkeypatch):
 def test_restore_geometry_skips_malformed_preferences(monkeypatch, prefs):
     calls = _patch_restore_environment(monkeypatch, prefs)
 
-    app._restore_geometry(SimpleNamespace(title="Simple RCON Tool"))
+    window_service._restore_geometry(SimpleNamespace(title="Simple RCON Tool"), False)
 
     assert calls == []
 
 
 def test_restore_geometry_swallows_win32_exception(monkeypatch):
     calls = _patch_restore_environment(monkeypatch, {"window": {"x": 10, "y": 20, "width": 50, "height": 40}})
-    app.ctypes.windll.user32.MonitorFromPoint = _Call(lambda *_args: (_ for _ in ()).throw(OSError("blocked")))
+    window_service.ctypes.windll.user32.MonitorFromPoint = _Call(lambda *_args: (_ for _ in ()).throw(OSError("blocked")))
 
-    app._restore_geometry(SimpleNamespace(title="Simple RCON Tool"))
+    window_service._restore_geometry(SimpleNamespace(title="Simple RCON Tool"), False)
 
     assert calls == []
 
 
 def test_monitor_work_area_returns_none_when_get_monitor_info_fails(monkeypatch):
     user32 = SimpleNamespace(GetMonitorInfoW=_Call(lambda *_args: 0))
-    monkeypatch.setattr(app.ctypes, "windll", SimpleNamespace(user32=user32), raising=False)
+    monkeypatch.setattr(window_service.ctypes, "windll", SimpleNamespace(user32=user32), raising=False)
 
-    assert app._monitor_work_area(1) is None
+    assert window_service._monitor_work_area(1) is None
 
 
 @pytest.mark.parametrize("dwm_result", [1, OSError("blocked")])
@@ -292,7 +292,7 @@ def test_frame_insets_returns_zero_when_dwm_is_unavailable(monkeypatch, dwm_resu
             if isinstance(dwm_result, Exception) else dwm_result
         )
     )
-    monkeypatch.setattr(app, "_win32", lambda: window_api)
-    monkeypatch.setattr(app.ctypes, "windll", SimpleNamespace(dwmapi=dwmapi), raising=False)
+    monkeypatch.setattr(window_service, "_win32", lambda: window_api)
+    monkeypatch.setattr(window_service.ctypes, "windll", SimpleNamespace(dwmapi=dwmapi), raising=False)
 
-    assert app._frame_insets(42) == (0, 0, 0, 0)
+    assert window_service._frame_insets(42) == (0, 0, 0, 0)

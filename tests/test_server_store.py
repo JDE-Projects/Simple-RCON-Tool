@@ -3,7 +3,9 @@ import json
 
 import pytest
 
-import simple_rcon_tool as app
+from app.api import Api
+from app import paths
+from app.services import servers
 
 
 def valid_server(**changes):
@@ -22,8 +24,8 @@ def valid_server(**changes):
 @pytest.fixture(autouse=True)
 def server_file(monkeypatch, tmp_path):
     servers_file = tmp_path / "servers.json"
-    monkeypatch.setattr(app, "SERVERS_FILE", str(servers_file))
-    monkeypatch.setattr(app, "_server_store_warning", None)
+    monkeypatch.setattr(paths, "SERVERS_FILE", str(servers_file))
+    monkeypatch.setattr(servers, "_server_store_warning", None)
     return servers_file
 
 
@@ -32,7 +34,7 @@ def backup_files(server_file):
 
 
 def test_load_missing_file_is_clean_first_run():
-    assert app.load_servers() == []
+    assert servers.load_servers() == []
 
 
 def test_load_unreadable_file_raises_without_touching_file(monkeypatch, server_file):
@@ -46,8 +48,8 @@ def test_load_unreadable_file_raises_without_touching_file(monkeypatch, server_f
 
     monkeypatch.setattr("builtins.open", unreadable)
 
-    with pytest.raises(app.ServerStoreError):
-        app.load_servers()
+    with pytest.raises(servers.ServerStoreError):
+        servers.load_servers()
     assert server_file.read_bytes() == b"[]"
 
 
@@ -57,12 +59,12 @@ def test_load_unreadable_file_raises_without_touching_file(monkeypatch, server_f
 def test_load_bad_root_sets_aside_file_and_warns(server_file, contents):
     server_file.write_bytes(contents)
 
-    assert app.load_servers() == []
+    assert servers.load_servers() == []
     backups = backup_files(server_file)
     assert not server_file.exists()
     assert len(backups) == 1
     assert backups[0].read_bytes() == contents
-    assert app._server_store_warning == (
+    assert servers._server_store_warning == (
         f"Your saved server list could not be read, so it was set aside as {backups[0].name} "
         "and the list starts empty."
     )
@@ -102,7 +104,7 @@ def test_load_skips_invalid_records_and_preserves_original(server_file, record):
     original = json.dumps([record]).encode("utf-8")
     server_file.write_bytes(original)
 
-    assert app.load_servers() == []
+    assert servers.load_servers() == []
     backups = backup_files(server_file)
     assert len(backups) == 1
     assert backups[0].read_bytes() == original
@@ -114,7 +116,7 @@ def test_load_defaults_missing_buttons_and_keeps_removed_catalog_game(server_fil
     del record["buttons"]
     server_file.write_text(json.dumps([record]), encoding="utf-8")
 
-    assert app.load_servers() == [{
+    assert servers.load_servers() == [{
         "id": "srv-one", "name": "One", "host": "127.0.0.1", "port": 27015,
         "game": "rust", "buttons": [],
     }]
@@ -126,7 +128,7 @@ def test_load_repairs_duplicate_ids_and_keeps_first(server_file):
     second = valid_server(name="Second")
     server_file.write_text(json.dumps([first, second]), encoding="utf-8")
 
-    loaded = app.load_servers()
+    loaded = servers.load_servers()
 
     assert loaded[0]["id"] == "srv-one"
     assert loaded[1]["id"].startswith("srv-")
@@ -139,7 +141,7 @@ def test_load_mixed_records_keeps_valid_records_and_backup_bytes(server_file):
     original = b'[ {"id":"srv-good","name":"Good","host":"127.0.0.1","port":27015,"game":"cs2","buttons":[]}, {"id":"srv-bad","name":"","host":"127.0.0.1","port":27015,"game":"cs2","buttons":[]} ]'
     server_file.write_bytes(original)
 
-    assert app.load_servers() == [{
+    assert servers.load_servers() == [{
         "id": "srv-good", "name": "Good", "host": "127.0.0.1", "port": 27015,
         "game": "cs2", "buttons": [],
     }]
@@ -148,10 +150,10 @@ def test_load_mixed_records_keeps_valid_records_and_backup_bytes(server_file):
 
 def test_load_returns_clean_records_when_cleanup_cannot_be_saved(monkeypatch, server_file):
     server_file.write_text(json.dumps([valid_server(), valid_server(name="")]), encoding="utf-8")
-    monkeypatch.setattr(app, "save_servers", lambda servers: False)
+    monkeypatch.setattr(servers, "save_servers", lambda _servers: False)
 
-    assert app.load_servers()[0]["id"] == "srv-one"
-    assert "cleanup could not be saved" in app._server_store_warning
+    assert servers.load_servers()[0]["id"] == "srv-one"
+    assert "cleanup could not be saved" in servers._server_store_warning
     assert len(backup_files(server_file)) == 1
 
 
@@ -174,12 +176,12 @@ def test_save_rejects_invalid_input_without_changing_file(server_file, changes):
     original = b'[{"id":"srv-existing","name":"Existing","host":"127.0.0.1","port":27015,"game":"cs2","buttons":[]}]'
     server_file.write_bytes(original)
 
-    assert app.Api().save_server(valid_server(**changes))["ok"] is False
+    assert Api("test").save_server(valid_server(**changes))["ok"] is False
     assert server_file.read_bytes() == original
 
 
 def test_save_converts_port_and_drops_password_and_extra_keys(server_file):
-    result = app.Api().save_server(valid_server(
+    result = Api("test").save_server(valid_server(
         id=None, port="27015", password="secret", extra="drop this",
     ))
 
@@ -195,11 +197,11 @@ def test_save_does_not_write_when_loading_raises_store_error(monkeypatch, server
     server_file.write_bytes(original)
 
     def fail_load():
-        raise app.ServerStoreError("Saved server list is unavailable.")
+        raise servers.ServerStoreError("Saved server list is unavailable.")
 
-    monkeypatch.setattr(app, "load_servers", fail_load)
+    monkeypatch.setattr(servers, "load_servers", fail_load)
 
-    assert app.Api().save_server(valid_server(id=None)) == {
+    assert Api("test").save_server(valid_server(id=None)) == {
         "ok": False, "error": "Saved server list is unavailable.",
     }
     assert server_file.read_bytes() == original
@@ -212,7 +214,7 @@ def test_save_rejects_missing_required_fields_without_changing_file(server_file,
     record = valid_server()
     del record[field]
 
-    assert app.Api().save_server(record)["ok"] is False
+    assert Api("test").save_server(record)["ok"] is False
     assert server_file.read_bytes() == original
 
 
@@ -220,13 +222,13 @@ def test_save_rejects_non_record_without_changing_file(server_file):
     original = b"[]"
     server_file.write_bytes(original)
 
-    assert app.Api().save_server(None)["ok"] is False
+    assert Api("test").save_server(None)["ok"] is False
     assert server_file.read_bytes() == original
 
 
 def test_get_config_returns_warning_once(server_file):
     server_file.write_text("not json", encoding="utf-8")
-    api = app.Api()
+    api = Api("test")
 
     first = api.get_config()
     second = api.get_config()
@@ -245,11 +247,11 @@ def test_delete_and_connect_return_store_error_without_writing(monkeypatch, serv
     server_file.write_bytes(original)
 
     def fail_load():
-        raise app.ServerStoreError("Saved server list is unavailable.")
+        raise servers.ServerStoreError("Saved server list is unavailable.")
 
-    monkeypatch.setattr(app, "load_servers", fail_load)
+    monkeypatch.setattr(servers, "load_servers", fail_load)
 
-    assert getattr(app.Api(), method)(*args) == {
+    assert getattr(Api("test"), method)(*args) == {
         "ok": False, "error": "Saved server list is unavailable.",
     }
     assert server_file.read_bytes() == original
@@ -261,10 +263,10 @@ def test_load_warning_names_only_what_happened(server_file):
         encoding="utf-8",
     )
 
-    app.load_servers()
+    servers.load_servers()
 
     backup_name = backup_files(server_file)[0].name
-    assert app._server_store_warning == (
+    assert servers._server_store_warning == (
         "1 saved server could not be read and was skipped. "
         "1 saved server shared an ID with another and was given a new one. "
         f"The original file was kept as {backup_name}."
@@ -277,10 +279,10 @@ def test_load_warning_for_skipped_records_only(server_file):
         encoding="utf-8",
     )
 
-    app.load_servers()
+    servers.load_servers()
 
     backup_name = backup_files(server_file)[0].name
-    assert app._server_store_warning == (
+    assert servers._server_store_warning == (
         f"2 saved servers could not be read and were skipped. The original file was kept as {backup_name}."
     )
 
@@ -290,32 +292,32 @@ def new_server(name):
 
 
 def test_new_server_ids_pass_validation_and_differ():
-    first, second = app._new_server_id(), app._new_server_id()
+    first, second = servers._new_server_id(), servers._new_server_id()
 
     assert first != second
-    assert isinstance(app._validate_server(valid_server(id=first), require_catalog_game=False), dict)
+    assert isinstance(servers._validate_server(valid_server(id=first), require_catalog_game=False), dict)
 
 
 def test_add_after_deleting_a_middle_server_gets_a_fresh_id(server_file):
-    api = app.Api()
+    api = Api("test")
     ids = [api.save_server(new_server(name))["servers"][-1]["id"] for name in ("A", "B", "C")]
 
     api.delete_server(ids[1])
-    servers = api.save_server(new_server("D"))["servers"]
+    saved_servers = api.save_server(new_server("D"))["servers"]
 
-    saved_ids = [s["id"] for s in servers]
-    assert [s["name"] for s in servers] == ["A", "C", "D"]
+    saved_ids = [s["id"] for s in saved_servers]
+    assert [s["name"] for s in saved_servers] == ["A", "C", "D"]
     assert len(set(saved_ids)) == 3
     assert saved_ids[2] not in ids
 
 
 def test_edit_after_add_after_delete_changes_only_the_target(server_file):
-    api = app.Api()
+    api = Api("test")
     ids = [api.save_server(new_server(name))["servers"][-1]["id"] for name in ("A", "B", "C")]
     api.delete_server(ids[1])
     new_id = api.save_server(new_server("D"))["servers"][-1]["id"]
 
     edited = dict(new_server("D renamed"), id=new_id)
-    servers = api.save_server(edited)["servers"]
+    saved_servers = api.save_server(edited)["servers"]
 
-    assert [s["name"] for s in servers] == ["A", "C", "D renamed"]
+    assert [s["name"] for s in saved_servers] == ["A", "C", "D renamed"]

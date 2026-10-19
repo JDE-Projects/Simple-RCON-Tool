@@ -27,7 +27,7 @@ If you enjoyed this project and would like to buy me a coffee, check out my [Ko-
 
 - The backend is a small Source RCON client using only the Python standard library (`socket`, `struct`).
 - The window is a [pywebview](https://pywebview.flowrl.com/) host on the Qt backend (PySide6), with the UI in `simple_rcon_tool-UI.html`. Fonts (Sora, JetBrains Mono) are bundled locally in `fonts/`, so the look holds with no internet.
-- The built-in buttons come from a catalog inside `simple_rcon_tool.py`, so updating that file updates everyone's buttons without touching their saved servers.
+- The built-in buttons come from a catalog in `app/services/catalog.py`, so updating that file updates everyone's buttons without touching their saved servers.
 
 ## Download and run
 
@@ -73,7 +73,7 @@ If you would rather run or build it yourself, you need:
 - **Python 3** on the machine's PATH.
 - `pip install -r requirements.txt` (pinned versions; includes `pywebview`, `PySide6`, `qtpy`, `pyinstaller`, and `truststore`). Keep `PyQt6` uninstalled so PySide6 is the bundled binding.
 
-Keep `simple_rcon_tool.py`, `simple_rcon_tool-UI.html`, the `fonts/` folder, `simple_rcon_tool.ico` and `simple_rcon_tool.png` together. Then either:
+Keep `simple_rcon_tool.py`, the `app/` folder, `simple_rcon_tool-UI.html`, the `fonts/` folder, `simple_rcon_tool.ico` and `simple_rcon_tool.png` together. Then either:
 
 - **Run from source:** `python simple_rcon_tool.py`
 - **Build the .exe:** double-click `Build_Simple_RCON_Tool.bat`, which uses PyInstaller to produce `dist\Simple RCON Tool\Simple RCON Tool.exe`. Distribute the whole `Simple RCON Tool` folder.

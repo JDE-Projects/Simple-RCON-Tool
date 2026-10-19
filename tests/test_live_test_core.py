@@ -4,7 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from simple_rcon_tool import CATALOG_BY_KEY, RconConnectionClosed
+from app.services.catalog import CATALOG_BY_KEY
+from app.services.rcon import RconConnectionClosed
 from tools.live_test import run
 from tools.live_test.core import (LiveTestError, classify_check, fill_command, listener_confirmed,
                                   mask_secrets, parse_appmanifest_build_id, parse_netstat,
