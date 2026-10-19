@@ -5,10 +5,8 @@ import time
 
 import pytest
 
-from simple_rcon_tool import (
-    RconClient, RconConnectionClosed, RconError, Session, game_ignores_event_packets,
-    game_reply_ids_lag, game_uses_sentinel,
-)
+from app.services.catalog import game_ignores_event_packets, game_reply_ids_lag, game_uses_sentinel
+from app.services.rcon import RconClient, RconConnectionClosed, RconError, Session
 
 
 def _packet(req_id, type_, body):

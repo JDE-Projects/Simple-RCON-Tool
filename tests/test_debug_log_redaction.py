@@ -1,7 +1,8 @@
 import pytest
 
-import debug_log
 import simple_rcon_tool as app
+from app import debug_log
+from app.services import diagnostics
 
 
 @pytest.mark.parametrize("key", ["password", "rcon_password", "rconpassword", "AdminPassword", "ServerPassword"])
@@ -9,7 +10,7 @@ import simple_rcon_tool as app
 @pytest.mark.parametrize("value", ["secret", '"secret with spaces"', "'secret with spaces'"])
 def test_redact_hides_every_password_token_form_in_written_log(tmp_path, key, separator, value):
     secret = "secret with spaces" if " " in value else "secret"
-    dbg = debug_log.DebugLog(str(tmp_path), "Test App", redact=app._redact)
+    dbg = debug_log.DebugLog(str(tmp_path), "Test App", redact=diagnostics._redact)
     assert dbg.set_enabled(True)
     dbg.log(f'{key}{separator}{value}')
     contents = open(dbg._path, encoding="utf-8").read()
@@ -18,7 +19,7 @@ def test_redact_hides_every_password_token_form_in_written_log(tmp_path, key, se
 
 
 def test_redact_hides_json_password_value_in_written_log(tmp_path):
-    dbg = debug_log.DebugLog(str(tmp_path), "Test App", redact=app._redact)
+    dbg = debug_log.DebugLog(str(tmp_path), "Test App", redact=diagnostics._redact)
     assert dbg.set_enabled(True)
     dbg.log('{"password": "secret with spaces"}')
     contents = open(dbg._path, encoding="utf-8").read()
@@ -38,9 +39,9 @@ class FakeSession:
 
 
 def _configured_logger(monkeypatch, tmp_path):
-    logger = debug_log.DebugLog(str(tmp_path), "Test App", redact=app._redact, on_warning=app._debug_warning)
-    monkeypatch.setattr(app, "_debug_logger", logger)
-    assert app.set_debug(True)
+    logger = debug_log.DebugLog(str(tmp_path), "Test App", redact=diagnostics._redact, on_warning=diagnostics._debug_warning)
+    monkeypatch.setattr(diagnostics, "_debug_logger", logger)
+    assert diagnostics.set_debug(True, app.APP_VERSION)
     return logger
 
 
@@ -127,8 +128,8 @@ def test_main_prunes_only_matching_logs(monkeypatch, tmp_path):
     (tmp_path / "notes.txt").write_text("keep", encoding="utf-8")
     folder = tmp_path / "Debug_Log_01052026_010000.txt"
     folder.mkdir()
-    logger = debug_log.DebugLog(str(tmp_path), "Test App", redact=app._redact, on_warning=app._debug_warning)
-    monkeypatch.setattr(app, "_debug_logger", logger)
+    logger = debug_log.DebugLog(str(tmp_path), "Test App", redact=diagnostics._redact, on_warning=diagnostics._debug_warning)
+    monkeypatch.setattr(diagnostics, "_debug_logger", logger)
     monkeypatch.setattr(app, "_acquire_single_instance", lambda _name: True)
     monkeypatch.setattr(app.webview, "create_window", lambda *_args, **_kwargs: _Window())
     monkeypatch.setattr(app.webview, "start", lambda **_kwargs: None)

@@ -2,7 +2,8 @@ from unittest.mock import patch
 
 import pytest
 
-from simple_rcon_tool import Api, JDE_PROJECTS_URL, _is_allowed_url
+from app.services.links import JDE_PROJECTS_URL, _is_allowed_url
+from simple_rcon_tool import Api
 
 
 ALLOWED = [
@@ -59,7 +60,7 @@ def test_open_url_opens_website_pages(url):
 @pytest.mark.parametrize("url", REFUSED)
 def test_open_url_refuses_without_calling_the_browser(url):
     with patch("simple_rcon_tool.webbrowser.open") as open_browser, \
-            patch("simple_rcon_tool.debug_log") as log:
+            patch("app.services.diagnostics.debug_log") as log:
         result = Api().open_url(url)
 
     assert result == {"ok": False, "error": "URL is not allowed."}

@@ -1,4 +1,6 @@
 import simple_rcon_tool as app
+from app import paths
+from app.services import diagnostics, prefs
 
 
 THEME_ERROR = "Couldn't save the theme choice. It will stay until you close the app."
@@ -7,21 +9,21 @@ EXPORT_ERROR = "The console could not be saved to a file."
 
 def test_save_theme_success(monkeypatch, tmp_path):
     pref_path = tmp_path / "simple_rcon_tool.pref"
-    monkeypatch.setattr(app, "app_dir", lambda: str(tmp_path))
-    monkeypatch.setattr(app, "_pref_path", lambda: str(pref_path))
+    monkeypatch.setattr(paths, "app_dir", lambda: str(tmp_path))
+    monkeypatch.setattr(paths, "_pref_path", lambda: str(pref_path))
 
     result = app.Api().save_theme("light")
 
     assert result == {"ok": True}
-    assert app.load_prefs() == {"theme": "light"}
+    assert prefs.load_prefs() == {"theme": "light"}
 
 
 def test_save_theme_failure_returns_error_and_logs(monkeypatch, tmp_path):
     messages = []
-    monkeypatch.setattr(app, "app_dir", lambda: str(tmp_path))
-    monkeypatch.setattr(app, "_pref_path", lambda: str(tmp_path / "simple_rcon_tool.pref"))
-    monkeypatch.setattr(app, "save_prefs", lambda _prefs: False)
-    monkeypatch.setattr(app, "debug_log", messages.append)
+    monkeypatch.setattr(paths, "app_dir", lambda: str(tmp_path))
+    monkeypatch.setattr(paths, "_pref_path", lambda: str(tmp_path / "simple_rcon_tool.pref"))
+    monkeypatch.setattr(prefs, "save_prefs", lambda _prefs: False)
+    monkeypatch.setattr(diagnostics, "debug_log", messages.append)
 
     result = app.Api().save_theme("light")
 
@@ -30,7 +32,7 @@ def test_save_theme_failure_returns_error_and_logs(monkeypatch, tmp_path):
 
 
 def test_export_console_success_writes_text(monkeypatch, tmp_path):
-    monkeypatch.setattr(app, "app_dir", lambda: str(tmp_path))
+    monkeypatch.setattr(paths, "app_dir", lambda: str(tmp_path))
     monkeypatch.setattr(app.time, "strftime", lambda _format: "2026-10-17_12-00-00")
 
     result = app.Api().export_console("My Server", "console text")
@@ -41,7 +43,7 @@ def test_export_console_success_writes_text(monkeypatch, tmp_path):
 
 
 def test_export_console_does_not_overwrite_same_second(monkeypatch, tmp_path):
-    monkeypatch.setattr(app, "app_dir", lambda: str(tmp_path))
+    monkeypatch.setattr(paths, "app_dir", lambda: str(tmp_path))
     monkeypatch.setattr(app.time, "strftime", lambda _format: "2026-10-17_12-00-00")
     api = app.Api()
 
@@ -61,9 +63,9 @@ def test_export_console_failure_returns_plain_error_and_logs(monkeypatch, tmp_pa
     def denied(*_args, **_kwargs):
         raise OSError("C:\\secret\\path denied")
 
-    monkeypatch.setattr(app, "app_dir", lambda: str(tmp_path))
+    monkeypatch.setattr(paths, "app_dir", lambda: str(tmp_path))
     monkeypatch.setattr("builtins.open", denied)
-    monkeypatch.setattr(app, "debug_log", messages.append)
+    monkeypatch.setattr(diagnostics, "debug_log", messages.append)
 
     result = app.Api().export_console("My Server", "console text")
 

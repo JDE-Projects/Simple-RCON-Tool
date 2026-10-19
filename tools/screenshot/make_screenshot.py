@@ -12,7 +12,7 @@ picture.
 Nothing here touches the working copy. The UI file, the icon, and the fonts
 folder are copied into a temp folder and served from there; the real files are
 only ever read, never written. The game catalog is read straight out of
-simple_rcon_tool.py (via ast, no import) so the buttons shown can never drift
+app/services/catalog.py (via ast, no import) so the buttons shown can never drift
 from the app's own catalog.
 
     python tools/screenshot/make_screenshot.py
@@ -74,6 +74,12 @@ def read_source() -> str:
         return f.read()
 
 
+def read_catalog_source() -> str:
+    path = os.path.join(REPO_ROOT, "app", "services", "catalog.py")
+    with open(path, encoding="utf-8") as f:
+        return f.read()
+
+
 def read_app_version(source: str) -> str:
     match = re.search(r'APP_VERSION\s*=\s*"([^"]+)"', source)
     if not match:
@@ -82,8 +88,8 @@ def read_app_version(source: str) -> str:
 
 
 def read_game_catalog(source: str) -> list:
-    """Pull GAME_CATALOG out of simple_rcon_tool.py without importing the
-    module (which pulls in pywebview/PySide6). It is a plain list literal, so
+    """Pull GAME_CATALOG out of app/services/catalog.py without importing the
+    app (which pulls in pywebview/PySide6). It is a plain list literal, so
     ast.literal_eval on the sliced source is enough."""
     start = source.index("GAME_CATALOG = [") + len("GAME_CATALOG = ")
     end = source.index("\nCATALOG_BY_KEY", start)
@@ -191,7 +197,7 @@ def main(argv: list) -> None:
 
     source = read_source()
     version = read_app_version(source)
-    catalog = read_game_catalog(source)
+    catalog = read_game_catalog(read_catalog_source())
     temp_dir = tempfile.mkdtemp(prefix="rcon-screenshot-")
     httpd = None
 
