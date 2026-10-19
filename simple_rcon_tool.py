@@ -495,7 +495,6 @@ def _version_gt(a, b):
 # Each game carries:
 #   key       stable identifier stored in servers.json
 #   name      display name shown in the picker
-#   protocol  "source" for the Source RCON client
 #   note      shown in the editor (mod requirements, quirks, status)
 #   buttons   locked command buttons rendered for every server of this game
 #   sentinel  whether the client sends an empty marker packet after each command to find the reply's end
@@ -514,7 +513,7 @@ def _version_gt(a, b):
 
 GAME_CATALOG = [
     {
-        "key": "ark_se", "name": "ARK: Survival Evolved", "protocol": "source",
+        "key": "ark_se", "name": "ARK: Survival Evolved",
         "sentinel": False,
         "note": "RCON needs RCONEnabled=True, RCONPort (default 27020) and "
                 "ServerAdminPassword. Commands take no cheat prefix. Get Chat shows "
@@ -539,7 +538,7 @@ GAME_CATALOG = [
         ],
     },
     {
-        "key": "ark_asa", "name": "ARK: Survival Ascended", "protocol": "source",
+        "key": "ark_asa", "name": "ARK: Survival Ascended",
         "sentinel": False,
         "note": "RCON needs RCONEnabled=True, RCONPort (default 27020) and "
                 "ServerAdminPassword. Commands take no cheat prefix. Get Chat shows "
@@ -563,7 +562,7 @@ GAME_CATALOG = [
         ],
     },
     {
-        "key": "conan", "name": "Conan Exiles", "protocol": "source",
+        "key": "conan", "name": "Conan Exiles",
         "sentinel": False,
         "reply_ids_lag": True,
         "note": "Kick takes a player name then a reason. Ban takes a platform ID "
@@ -581,7 +580,7 @@ GAME_CATALOG = [
         ],
     },
     {
-        "key": "palworld", "name": "Palworld", "protocol": "source",
+        "key": "palworld", "name": "Palworld",
         "note": "Commands are case-sensitive. Broadcast cannot contain spaces "
                 "(spaces are auto-converted to underscores).",
         "buttons": [
@@ -599,7 +598,7 @@ GAME_CATALOG = [
         ],
     },
     {
-        "key": "minecraft", "name": "Minecraft (Java)", "protocol": "source",
+        "key": "minecraft", "name": "Minecraft (Java)",
         "sentinel": False,
         "note": "Standard Java-edition console commands.",
         "buttons": [
@@ -616,7 +615,7 @@ GAME_CATALOG = [
         ],
     },
     {
-        "key": "cs2", "name": "Counter-Strike 2", "protocol": "source",
+        "key": "cs2", "name": "Counter-Strike 2",
         "sentinel": False,
         "note": "RCON stays off unless the server starts with -usercon. Set the "
                 "password with rcon_password. Default port 27015, the same as the "
@@ -629,7 +628,7 @@ GAME_CATALOG = [
         ],
     },
     {
-        "key": "pz", "name": "Project Zomboid", "protocol": "source",
+        "key": "pz", "name": "Project Zomboid",
         "note": ("No leading slash over RCON. Put quotes around multi-word names. RCON stays off "
                  "until RCONPassword is set in the server's .ini (port 27015 by default). "
                  "Kick needs the player online."),
@@ -646,7 +645,7 @@ GAME_CATALOG = [
         ],
     },
     {
-        "key": "squad", "name": "Squad", "protocol": "source",
+        "key": "squad", "name": "Squad",
         "sentinel": False,
         "ignore_event_packets": True,
         "note": "Default RCON port 21114. RCON stays off until Password is set "
@@ -668,7 +667,7 @@ GAME_CATALOG = [
         ],
     },
     {
-        "key": "gmod", "name": "Garry's Mod", "protocol": "source",
+        "key": "gmod", "name": "Garry's Mod",
         "note": "Default port 27015, the same as the game port. Set the RCON "
                 "password with rcon_password. Kick takes a player's name as "
                 "Status shows it.",
@@ -680,7 +679,7 @@ GAME_CATALOG = [
         ],
     },
     {
-        "key": "eco", "name": "Eco", "protocol": "source",
+        "key": "eco", "name": "Eco",
         "sentinel": False,
         "note": "Default port 3002. RCON stays off until RconPassword is set in "
                 "Configs/Network.eco. Kick/Ban use a Name,Reason format; banning "
@@ -698,10 +697,12 @@ GAME_CATALOG = [
         ],
     },
     {
-        "key": "valheim", "name": "Valheim", "protocol": "source",
+        "key": "valheim", "name": "Valheim",
         "sentinel": False,
         "note": "Requires the ValheimRcon mod. Crossplay must be off "
-                "(BepInEx mods do not load with crossplay on).",
+                "(BepInEx mods do not load with crossplay on). On a new world, "
+                "RCON opens only after the server is shut down cleanly and "
+                "started again once.",
         "buttons": [
             {"label": "Save", "command": "save"},
             {"label": "Kick", "command": "kick {arg}"},

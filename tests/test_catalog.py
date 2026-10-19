@@ -19,8 +19,7 @@ def test_catalog_contains_only_unique_source_rcon_games():
     assert not UNSUPPORTED_GAME_KEYS.intersection(app.CATALOG_BY_KEY)
     assert len(app.CATALOG_BY_KEY) == len(app.GAME_CATALOG)
     for game in app.GAME_CATALOG:
-        assert {"key", "name", "protocol", "buttons"}.issubset(game)
-        assert game["protocol"] == "source"
+        assert {"key", "name", "buttons"}.issubset(game)
         assert isinstance(game["buttons"], list)
 
 

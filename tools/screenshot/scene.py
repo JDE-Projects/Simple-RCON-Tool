@@ -3,7 +3,7 @@
 already connected and its console populated with real-looking RCON output.
 
 None of this is real data: all hostnames, IPs, and player names are invented.
-The game catalog (buttons, protocols, notes) is not duplicated here; the
+The game catalog (buttons, notes) is not duplicated here; the
 generator reads it straight from simple_rcon_tool.py so the screenshot can
 never show buttons the app doesn't actually have.
 """

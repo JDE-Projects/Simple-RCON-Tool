@@ -105,7 +105,7 @@ A few quirks worth knowing:
 
 - **Palworld** commands are case-sensitive, and Broadcast cannot contain spaces (the app auto-converts spaces to underscores).
 - **Eco** kick and ban take a `Name,Reason` value.
-- **Valheim** needs the ValheimRcon mod loaded on the server, with crossplay off; the editor shows that note when you pick it.
+- **Valheim** needs the ValheimRcon mod loaded on the server, with crossplay off, and on a brand-new world, RCON only opens after one clean shutdown and restart; the editor shows that note when you pick it.
 
 ## Security and privacy
 
