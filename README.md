@@ -59,9 +59,7 @@ machine, and is signed with a build-provenance attestation. To confirm your
 download is genuine, install the [GitHub CLI](https://cli.github.com) and run:
 
 ```
-gh attestation verify SimpleRCONTool-vX.Y.Z.zip \
-  --repo JDE-Projects/Simple-RCON-Tool \
-  --signer-repo JDE-Projects/Build-Tools
+gh attestation verify SimpleRCONTool-vX.Y.Z.zip --repo JDE-Projects/Simple-RCON-Tool --signer-repo JDE-Projects/Build-Tools
 ```
 
 A `Verification succeeded!` line means the file was built by the published
@@ -115,6 +113,7 @@ A few quirks worth knowing:
 - `servers.json` holds only the name, host, port, game key, and custom buttons. Treat it as sensitive: it maps your internal hosts and ports, so don't share it publicly (in a bug report, forum post, or public repo).
 - The debug log is off by default. When you turn it on, it writes one `Debug_Log_*.txt` next to the app for that run, with no credentials in it.
 - **Network use.** Other than the job you ask of it, this app makes one automatic network call: a check to GitHub for a newer release (at startup and when you press **Check for updates**), which sends only a version request. It collects and sends no personal data, usage data, or analytics.
+- **Privacy policy.** The full privacy policy for this app and the other JDE-Projects tools is at https://jde-projects.com/privacy.
 
 ## A note on how this was built
 
@@ -126,4 +125,4 @@ Released under the [PolyForm Noncommercial License 1.0.0](LICENSE). Personal and
 
 This build bundles third-party code (Qt via PySide6, pywebview, and the Sora and JetBrains Mono fonts). Their notices are in [THIRD-PARTY-LICENSES.txt](THIRD-PARTY-LICENSES.txt).
 
-For commercial licensing, open a [GitHub issue](https://github.com/JDE-Projects/Simple-RCON-Tool/issues) with the title "Commercial License Inquiry".
+For commercial licensing, see the [JDE-Projects support page](https://jde-projects.com/support/#commercial-licensing).
