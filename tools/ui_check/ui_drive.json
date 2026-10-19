@@ -42,6 +42,16 @@
       "script": "tools/ui_check/cs2_console.js",
       "fixture": "tools/ui_check/cs2_fixture.py",
       "timeout_s": 300
+    },
+    "window-fit-oversized": {
+      "script": "tools/ui_check/window_fit.js",
+      "fixture": "tools/ui_check/window_fit_oversized_fixture.py",
+      "timeout_s": 120
+    },
+    "window-fit-offscreen": {
+      "script": "tools/ui_check/window_fit.js",
+      "fixture": "tools/ui_check/window_fit_offscreen_fixture.py",
+      "timeout_s": 120
     }
   }
 }
