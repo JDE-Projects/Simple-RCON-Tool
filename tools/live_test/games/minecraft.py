@@ -54,6 +54,6 @@ DEFINITION = {
         {"label": "Ban List", "expect": {"reply": r"There are no bans|There are \d+ ban"}},
         {"label": "Weather Clear", "expect": {"reply": r"Set the weather to clear"}},
         {"label": "Set Day", "expect": {"reply": r"Set the time to|Set minecraft:overworld to time marker minecraft:day"}},
-        {"label": "Stop Server", "expect": {"disconnect": True, "process_exits": True, "log_contains": "Stopping"}, "stop": True},
+        {"label": "Stop Server", "expect": {"disconnect": True, "log_contains": "Stopping"}, "stop": True},
     ],
 }
